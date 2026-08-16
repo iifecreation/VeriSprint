@@ -2,19 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { api, type WorkspaceSettings } from "@/lib/api";
+import { decodeAccessTokenClaims } from "@/lib/auth";
 
 /** Workspace settings: white-label branding + ROI calculator inputs. */
 export default function SettingsPage() {
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
   const [saved, setSaved] = useState(false);
+  const workspaceId = decodeAccessTokenClaims()?.workspace_id ?? null;
 
   useEffect(() => {
-    api.getSettings().then(setSettings);
-  }, []);
+    if (workspaceId) api.getSettings(workspaceId).then(setSettings);
+  }, [workspaceId]);
 
   async function handleSave() {
-    if (!settings) return;
-    const updated = await api.updateSettings({
+    if (!settings || !workspaceId) return;
+    const updated = await api.updateSettings(workspaceId, {
       name: settings.name,
       logo_url: settings.logo_url,
       primary_color_hex: settings.primary_color_hex,
@@ -26,6 +28,7 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2000);
   }
 
+  if (!workspaceId) return <div className="mx-auto max-w-lg px-4 py-8 text-sm text-gray-400">Sign in to a workspace to manage settings.</div>;
   if (!settings) return <div className="mx-auto max-w-lg px-4 py-8 text-sm text-gray-400">Loading…</div>;
 
   return (

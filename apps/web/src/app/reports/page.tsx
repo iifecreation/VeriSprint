@@ -36,7 +36,10 @@ export default function ReportsPage() {
   }
 
   useEffect(() => {
-    refresh();
+    // Deferred to a microtask — see dashboard/page.tsx for why.
+    queueMicrotask(() => {
+      refresh();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoId]);
 

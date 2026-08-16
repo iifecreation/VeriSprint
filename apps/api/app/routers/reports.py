@@ -11,7 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Repo, ReportDocument, ReportType, Sprint
+from app.audit import record_audit_for_user
+from app.auth.dependencies import ensure_workspace_access, get_internal_user, get_repo_for_user
+from app.db.models import ClientPortalLink, Repo, ReportDocument, ReportType, Sprint, User
 from app.db.session import get_db
 from app.queue.client import enqueue
 from app.schemas import GenerateReportRequest, ReportDocumentOut
@@ -19,11 +21,19 @@ from app.schemas import GenerateReportRequest, ReportDocumentOut
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
+async def _repo_for_payload(payload: GenerateReportRequest, user: User, db: AsyncSession) -> Repo:
+    repo = await db.get(Repo, payload.repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="Repo not found")
+    ensure_workspace_access(user, repo.workspace_id)
+    return repo
+
+
 @router.get("", response_model=list[ReportDocumentOut])
 async def list_reports(
-    repo_id: UUID, report_type: str | None = None, db: AsyncSession = Depends(get_db)
+    report_type: str | None = None, repo: Repo = Depends(get_repo_for_user), db: AsyncSession = Depends(get_db)
 ) -> list[ReportDocument]:
-    stmt = select(ReportDocument).where(ReportDocument.repo_id == repo_id).order_by(ReportDocument.created_at.desc())
+    stmt = select(ReportDocument).where(ReportDocument.repo_id == repo.id).order_by(ReportDocument.created_at.desc())
     if report_type is not None:
         stmt = stmt.where(ReportDocument.report_type == report_type)
     result = await db.execute(stmt)
@@ -31,15 +41,23 @@ async def list_reports(
 
 
 @router.get("/{report_id}", response_model=ReportDocumentOut)
-async def get_report(report_id: UUID, db: AsyncSession = Depends(get_db)) -> ReportDocument:
+async def get_report(
+    report_id: UUID, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
+) -> ReportDocument:
     report = await db.get(ReportDocument, report_id)
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found")
+    repo = await db.get(Repo, report.repo_id)
+    if repo is not None:
+        ensure_workspace_access(user, repo.workspace_id)
     return report
 
 
 @router.post("/sprint-rollup", response_model=ReportDocumentOut)
-async def generate_sprint_rollup(payload: GenerateReportRequest, db: AsyncSession = Depends(get_db)) -> ReportDocument:
+async def generate_sprint_rollup(
+    payload: GenerateReportRequest, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
+) -> ReportDocument:
+    await _repo_for_payload(payload, user, db)
     if payload.sprint_id is None:
         raise HTTPException(status_code=400, detail="sprint_id is required for a sprint rollup")
     sprint = await db.get(Sprint, payload.sprint_id)
@@ -55,6 +73,11 @@ async def generate_sprint_rollup(payload: GenerateReportRequest, db: AsyncSessio
         status="generating",
     )
     db.add(report)
+    await db.flush()  # populate report.id (client-side uuid4 default) for the audit entry
+    await record_audit_for_user(
+        db, user=user, action="report.generated", entity_type="report_document", entity_id=str(report.id),
+        repo_id=payload.repo_id, after={"report_type": report.report_type.value, "sprint_id": str(sprint.id)},
+    )
     await db.commit()
     await db.refresh(report)
     await enqueue("generate_sprint_rollup", str(payload.repo_id), str(sprint.id), str(report.id))
@@ -62,7 +85,10 @@ async def generate_sprint_rollup(payload: GenerateReportRequest, db: AsyncSessio
 
 
 @router.post("/investor-update", response_model=ReportDocumentOut)
-async def generate_investor_update(payload: GenerateReportRequest, db: AsyncSession = Depends(get_db)) -> ReportDocument:
+async def generate_investor_update(
+    payload: GenerateReportRequest, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
+) -> ReportDocument:
+    await _repo_for_payload(payload, user, db)
     if payload.period_start is None or payload.period_end is None:
         raise HTTPException(status_code=400, detail="period_start and period_end are required")
 
@@ -75,6 +101,11 @@ async def generate_investor_update(payload: GenerateReportRequest, db: AsyncSess
         status="generating",
     )
     db.add(report)
+    await db.flush()  # populate report.id (client-side uuid4 default) for the audit entry
+    await record_audit_for_user(
+        db, user=user, action="report.generated", entity_type="report_document", entity_id=str(report.id),
+        repo_id=payload.repo_id, after={"report_type": report.report_type.value},
+    )
     await db.commit()
     await db.refresh(report)
     await enqueue("generate_investor_update", str(payload.repo_id), str(report.id))
@@ -82,13 +113,20 @@ async def generate_investor_update(payload: GenerateReportRequest, db: AsyncSess
 
 
 @router.post("/client-portal", response_model=ReportDocumentOut)
-async def generate_client_portal_report(payload: GenerateReportRequest, db: AsyncSession = Depends(get_db)) -> ReportDocument:
+async def generate_client_portal_report(
+    payload: GenerateReportRequest, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
+) -> ReportDocument:
+    repo = await _repo_for_payload(payload, user, db)
     if payload.period_start is None or payload.period_end is None:
         raise HTTPException(status_code=400, detail="period_start and period_end are required")
 
-    # Mint the share token now, not on successful generation — the client link
+    # Mint the link token now, not on successful generation — the client link
     # must stay stable even if this generation attempt fails (the portal page
     # then just shows "generating"/"failed" at the same URL, not a dead link).
+    # `share_token` on the report itself still carries the same value for the
+    # frontend's existing /portal/{token} link — ClientPortalLink is the real
+    # lookup now (revocable/expirable independent of the report).
+    token = secrets.token_urlsafe(24)
     report = ReportDocument(
         repo_id=payload.repo_id,
         report_type=ReportType.CLIENT_PORTAL,
@@ -96,9 +134,15 @@ async def generate_client_portal_report(payload: GenerateReportRequest, db: Asyn
         period_end=payload.period_end,
         title=payload.title or f"Delivery Summary: {payload.period_start.date()} to {payload.period_end.date()}",
         status="generating",
-        share_token=secrets.token_urlsafe(24),
+        share_token=token,
     )
     db.add(report)
+    await db.flush()  # populate report.id (client-side uuid4 default) for the FK + audit entry below
+    db.add(ClientPortalLink(workspace_id=repo.workspace_id, report_id=report.id, token=token))
+    await record_audit_for_user(
+        db, user=user, action="report.generated", entity_type="report_document", entity_id=str(report.id),
+        repo_id=payload.repo_id, after={"report_type": report.report_type.value},
+    )
     await db.commit()
     await db.refresh(report)
     await enqueue("generate_client_portal_report", str(payload.repo_id), str(report.id))
@@ -106,10 +150,10 @@ async def generate_client_portal_report(payload: GenerateReportRequest, db: Asyn
 
 
 @router.post("/onboarding-doc", response_model=ReportDocumentOut)
-async def generate_onboarding_doc(payload: GenerateReportRequest, db: AsyncSession = Depends(get_db)) -> ReportDocument:
-    repo = await db.get(Repo, payload.repo_id)
-    if repo is None:
-        raise HTTPException(status_code=404, detail="Repo not found")
+async def generate_onboarding_doc(
+    payload: GenerateReportRequest, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
+) -> ReportDocument:
+    repo = await _repo_for_payload(payload, user, db)
 
     report = ReportDocument(
         repo_id=payload.repo_id,
@@ -118,6 +162,11 @@ async def generate_onboarding_doc(payload: GenerateReportRequest, db: AsyncSessi
         status="generating",
     )
     db.add(report)
+    await db.flush()  # populate report.id (client-side uuid4 default) for the audit entry
+    await record_audit_for_user(
+        db, user=user, action="report.generated", entity_type="report_document", entity_id=str(report.id),
+        repo_id=payload.repo_id, after={"report_type": report.report_type.value},
+    )
     await db.commit()
     await db.refresh(report)
     await enqueue("generate_onboarding_doc", str(payload.repo_id), str(report.id))

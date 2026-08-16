@@ -6,8 +6,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit import record_audit
-from app.db.models import Commit, ReconciliationFlag, ReconciliationFlagType
+from app.audit import record_audit_for_user
+from app.auth.dependencies import ensure_workspace_access, get_internal_user, get_repo_for_user
+from app.db.models import Commit, ReconciliationFlag, ReconciliationFlagType, Repo, User
 from app.db.session import get_db
 from app.queue.client import enqueue
 from app.schemas import OrphanCommitOut
@@ -20,7 +21,7 @@ class LinkCommitRequest(BaseModel):
 
 
 @router.get("/repos/{repo_id}/orphan-commits", response_model=list[OrphanCommitOut])
-async def list_orphan_commits(repo_id: UUID, db: AsyncSession = Depends(get_db)) -> list[Commit]:
+async def list_orphan_commits(repo: Repo = Depends(get_repo_for_user), db: AsyncSession = Depends(get_db)) -> list[Commit]:
     result = await db.execute(
         select(Commit)
         .join(
@@ -29,23 +30,31 @@ async def list_orphan_commits(repo_id: UUID, db: AsyncSession = Depends(get_db))
             & (ReconciliationFlag.flag_type == ReconciliationFlagType.ORPHAN_COMMIT)
             & (ReconciliationFlag.is_resolved.is_(False)),
         )
-        .where(Commit.repo_id == repo_id)
+        .where(Commit.repo_id == repo.id)
         .order_by(Commit.committed_at.desc())
     )
     return list(result.scalars().all())
 
 
 @router.post("/repos/{repo_id}/detect-orphans")
-async def trigger_orphan_detection(repo_id: UUID) -> dict:
-    await enqueue("detect_orphan_commits", str(repo_id))
+async def trigger_orphan_detection(repo: Repo = Depends(get_repo_for_user)) -> dict:
+    await enqueue("detect_orphan_commits", str(repo.id))
     return {"queued": True}
 
 
 @router.post("/orphan-commits/{commit_id}/link")
-async def link_orphan_commit(commit_id: UUID, payload: LinkCommitRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def link_orphan_commit(
+    commit_id: UUID,
+    payload: LinkCommitRequest,
+    user: User = Depends(get_internal_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
     commit = await db.get(Commit, commit_id)
     if commit is None:
         raise HTTPException(status_code=404, detail="Commit not found")
+    repo = await db.get(Repo, commit.repo_id)
+    if repo is not None:
+        ensure_workspace_access(user, repo.workspace_id)
 
     before = {"linked_ticket_key": commit.linked_ticket_key}
     commit.linked_ticket_key = payload.ticket_key
@@ -62,15 +71,9 @@ async def link_orphan_commit(commit_id: UUID, payload: LinkCommitRequest, db: As
         flag.is_resolved = True
 
     await db.flush()
-    await record_audit(
-        db,
-        actor="user",
-        action="commit.linked_to_ticket",
-        entity_type="commit",
-        entity_id=str(commit.id),
-        repo_id=commit.repo_id,
-        before=before,
-        after={"linked_ticket_key": payload.ticket_key},
+    await record_audit_for_user(
+        db, user=user, action="commit.linked_to_ticket", entity_type="commit", entity_id=str(commit.id),
+        repo_id=commit.repo_id, before=before, after={"linked_ticket_key": payload.ticket_key},
     )
     await db.commit()
 

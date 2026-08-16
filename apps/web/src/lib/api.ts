@@ -1,4 +1,5 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { API_BASE_URL } from "./config";
+import { clearTokens, getAccessToken, getRefreshToken, refreshAccessToken } from "./auth";
 
 export type Repo = {
   id: string;
@@ -189,12 +190,178 @@ export type WorkspaceSettings = {
   updated_at: string;
 };
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+// --- Auth + Super-Admin Dashboard (spec Sections 6, 7) -----------------------
+
+export type CurrentUser = {
+  id: string;
+  email: string | null;
+  github_login: string | null;
+  name: string | null;
+  avatar_url: string | null;
+  role: string;
+  workspace_id: string | null;
+  last_login_at: string | null;
+};
+
+export type TokenPair = {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+  user: CurrentUser;
+};
+
+export type AdminOverview = {
+  workspace_count: number;
+  active_workspace_count: number;
+  user_count: number;
+  total_mrr: number;
+  open_error_count: number;
+  unresolved_flag_count: number;
+};
+
+export type AdminWorkspace = {
+  id: string;
+  name: string;
+  account_login: string;
+  plan_tier: string;
+  status: string;
+  mrr: number;
+  repo_count: number;
+  user_count: number;
+  created_at: string;
+};
+
+export type AdminUser = {
+  id: string;
+  email: string | null;
+  github_login: string | null;
+  name: string | null;
+  role: string;
+  workspace_id: string | null;
+  workspace_name: string | null;
+  last_login_at: string | null;
+  created_at: string;
+};
+
+export type AdminErrorEvent = {
+  id: string;
+  workspace_id: string | null;
+  source: string;
+  severity: string;
+  message: string;
+  stack_ref: string | null;
+  resolved_at: string | null;
+  created_at: string;
+};
+
+export type AdminSystemMetric = {
+  id: string;
+  metric_name: string;
+  value: number;
+  workspace_id: string | null;
+  recorded_at: string;
+};
+
+export type AdminRevenue = {
+  total_mrr: number;
+  workspace_count: number;
+  by_plan_tier: Record<string, number>;
+  by_status: Record<string, number>;
+};
+
+export type AdminFeatureFlag = {
+  id: string;
+  key: string;
+  description: string | null;
+  enabled_globally: boolean;
+  enabled_workspace_ids: string[];
+  min_plan_tier: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// --- Phase 2/3 competitor-parity features -------------------------------------
+
+export type DORAMetrics = {
+  period_start: string;
+  period_end: string;
+  deployed_pr_count: number;
+  deployment_frequency_per_day: number;
+  lead_time_for_changes_hours: number | null;
+  change_failure_rate: null;
+  mean_time_to_restore_hours: null;
+  unavailable_metrics_note: string;
+};
+
+export type CodeHealthSignals = {
+  period_start: string;
+  period_end: string;
+  total_evidence_items: number;
+  test_added_count: number;
+  test_missing_count: number;
+  dead_code_count: number;
+  todo_count: number;
+  risk_count: number;
+  health_score: number | null;
+};
+
+export type RiskRadar = {
+  repo_id: string;
+  open_flags_by_type: Record<string, number>;
+  low_confidence_ticket_count: number;
+  stale_in_progress_ticket_count: number;
+  risk_score: number;
+};
+
+export type TeamGoal = {
+  id: string;
+  workspace_id: string;
+  repo_id: string | null;
+  name: string;
+  metric_key: string;
+  target_value: number;
+  period_start: string;
+  period_end: string;
+  current_value: number | null;
+  progress_pct: number | null;
+  created_at: string;
+};
+
+async function doFetch(path: string, init: RequestInit | undefined, accessToken: string | null): Promise<Response> {
+  return fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...init?.headers,
+    },
     cache: "no-store",
   });
+}
+
+/** For endpoints reachable without a session (login, password reset) — never
+ * attaches a stale token or tries to refresh on 401 (a wrong password is not
+ * "your session expired"). */
+async function apiFetchNoAuth<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await doFetch(path, init, null);
+  if (!res.ok) {
+    throw new Error(`API ${path} failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  let res = await doFetch(path, init, getAccessToken());
+  if (res.status === 401 && getRefreshToken()) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      res = await doFetch(path, init, newToken);
+    } else if (typeof window !== "undefined") {
+      clearTokens();
+      window.location.href = "/login";
+    }
+  }
   if (!res.ok) {
     throw new Error(`API ${path} failed: ${res.status} ${await res.text()}`);
   }
@@ -269,14 +436,50 @@ export const api = {
   getRoi: (repoId: string, periodStart: string, periodEnd: string) =>
     apiFetch<ROISummary>(`/roi?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
 
-  listWorkUnits: (installationId: string) => apiFetch<LogicalWorkUnit[]>(`/work-units?installation_id=${installationId}`),
+  listWorkUnits: (workspaceId: string) => apiFetch<LogicalWorkUnit[]>(`/work-units?workspace_id=${workspaceId}`),
 
   listAuditLog: (repoId: string) => apiFetch<AuditLogEntry[]>(`/audit?repo_id=${repoId}`),
   auditExportUrl: (repoId: string) => `${API_BASE_URL}/audit/export?repo_id=${repoId}`,
 
-  getSettings: () => apiFetch<WorkspaceSettings>("/settings"),
-  updateSettings: (payload: Partial<Pick<WorkspaceSettings, "name" | "logo_url" | "primary_color_hex" | "avg_standup_minutes" | "hourly_rate_usd">>) =>
-    apiFetch<WorkspaceSettings>("/settings", { method: "PUT", body: JSON.stringify(payload) }),
+  getSettings: (workspaceId: string) => apiFetch<WorkspaceSettings>(`/settings?workspace_id=${workspaceId}`),
+  updateSettings: (
+    workspaceId: string,
+    payload: Partial<Pick<WorkspaceSettings, "name" | "logo_url" | "primary_color_hex" | "avg_standup_minutes" | "hourly_rate_usd">>,
+  ) => apiFetch<WorkspaceSettings>(`/settings?workspace_id=${workspaceId}`, { method: "PUT", body: JSON.stringify(payload) }),
+
+  // --- Auth (spec Section 6) ---
+  login: (email: string, password: string) =>
+    apiFetchNoAuth<TokenPair>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  me: () => apiFetch<CurrentUser>("/auth/me"),
+  logout: () => apiFetch<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+
+  // --- Super-Admin Dashboard (spec Section 7) ---
+  adminOverview: () => apiFetch<AdminOverview>("/admin/overview"),
+  adminListWorkspaces: (search?: string) => apiFetch<AdminWorkspace[]>(`/admin/workspaces${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  adminUpdateWorkspace: (workspaceId: string, payload: { status?: string; plan_tier?: string }) =>
+    apiFetch<AdminWorkspace>(`/admin/workspaces/${workspaceId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  adminListUsers: (search?: string) => apiFetch<AdminUser[]>(`/admin/users${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  adminListErrors: (includeResolved = false) => apiFetch<AdminErrorEvent[]>(`/admin/errors?include_resolved=${includeResolved}`),
+  adminResolveError: (errorId: string) => apiFetch<AdminErrorEvent>(`/admin/errors/${errorId}/resolve`, { method: "POST" }),
+  adminListMetrics: (metricName?: string) => apiFetch<AdminSystemMetric[]>(`/admin/metrics${metricName ? `?metric_name=${metricName}` : ""}`),
+  adminRevenue: () => apiFetch<AdminRevenue>("/admin/revenue"),
+  adminListFlags: () => apiFetch<AdminFeatureFlag[]>("/admin/flags"),
+  adminCreateFlag: (payload: { key: string; description?: string; enabled_globally?: boolean; min_plan_tier?: string | null }) =>
+    apiFetch<AdminFeatureFlag>("/admin/flags", { method: "POST", body: JSON.stringify(payload) }),
+  adminUpdateFlag: (flagId: string, payload: Partial<{ description: string; enabled_globally: boolean; min_plan_tier: string | null }>) =>
+    apiFetch<AdminFeatureFlag>(`/admin/flags/${flagId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  adminAuditLog: (limit = 100) => apiFetch<AuditLogEntry[]>(`/admin/audit?limit=${limit}`),
+
+  // --- Phase 2/3 competitor-parity features ---
+  resolvedFeatureFlags: (keys: string[]) => apiFetch<{ flags: Record<string, boolean> }>(`/billing/feature-flags?keys=${keys.join(",")}`),
+  getDora: (repoId: string, periodStart: string, periodEnd: string) =>
+    apiFetch<DORAMetrics>(`/dora?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
+  getCodeHealth: (repoId: string, periodStart: string, periodEnd: string) =>
+    apiFetch<CodeHealthSignals>(`/code-health?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
+  getRiskRadar: (repoId: string) => apiFetch<RiskRadar>(`/risk?repo_id=${repoId}`),
+  listTeamGoals: (workspaceId: string) => apiFetch<TeamGoal[]>(`/goals?workspace_id=${workspaceId}`),
+  createTeamGoal: (payload: { name: string; metric_key: string; target_value: number; period_start: string; period_end: string; repo_id?: string | null }) =>
+    apiFetch<TeamGoal>("/goals", { method: "POST", body: JSON.stringify(payload) }),
 };
 
 export { API_BASE_URL };

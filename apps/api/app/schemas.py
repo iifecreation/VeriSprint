@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class RepoOut(BaseModel):
@@ -269,4 +269,429 @@ class WorkspaceSettingsUpdate(BaseModel):
     logo_url: str | None = None
     primary_color_hex: str | None = None
     avg_standup_minutes: int | None = None
-    hourly_rate_usd: float | None = None
+
+
+# --- Auth (spec Section 6) ---------------------------------------------------
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    email: str | None
+    github_login: str | None
+    name: str | None
+    avatar_url: str | None
+    role: str
+    workspace_id: uuid.UUID | None
+    last_login_at: datetime | None
+
+
+class TokenPair(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserOut
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1)
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class SetPasswordRequest(BaseModel):
+    token: str
+    password: str = Field(min_length=10, max_length=256)
+
+
+class RequestPasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class InviteUserRequest(BaseModel):
+    email: EmailStr
+    role: str
+    name: str | None = None
+
+
+class ChangeRoleRequest(BaseModel):
+    role: str
+
+
+# --- Super-Admin Dashboard (spec Section 7) -----------------------------------
+
+class AdminWorkspaceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    account_login: str
+    plan_tier: str
+    status: str
+    mrr: float
+    repo_count: int
+    user_count: int
+    created_at: datetime
+
+
+class AdminWorkspaceUpdate(BaseModel):
+    status: str | None = None
+    plan_tier: str | None = None
+
+
+class AdminUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    email: str | None
+    github_login: str | None
+    name: str | None
+    role: str
+    workspace_id: uuid.UUID | None
+    workspace_name: str | None = None
+    last_login_at: datetime | None
+    created_at: datetime
+
+
+class ErrorEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID | None
+    source: str
+    severity: str
+    message: str
+    stack_ref: str | None
+    resolved_at: datetime | None
+    created_at: datetime
+
+
+class SystemMetricOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    metric_name: str
+    value: float
+    workspace_id: uuid.UUID | None
+    recorded_at: datetime
+
+
+class RevenueSummary(BaseModel):
+    total_mrr: float
+    workspace_count: int
+    by_plan_tier: dict[str, float]
+    by_status: dict[str, int]
+
+
+class FeatureFlagOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    key: str
+    description: str | None
+    enabled_globally: bool
+    enabled_workspace_ids: list[str]
+    min_plan_tier: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class FeatureFlagCreate(BaseModel):
+    key: str
+    description: str | None = None
+    enabled_globally: bool = False
+    min_plan_tier: str | None = None
+
+
+class FeatureFlagUpdate(BaseModel):
+    description: str | None = None
+    enabled_globally: bool | None = None
+    enabled_workspace_ids: list[str] | None = None
+    min_plan_tier: str | None = None
+
+
+class AdminOverview(BaseModel):
+    workspace_count: int
+    active_workspace_count: int
+    user_count: int
+    total_mrr: float
+    open_error_count: int
+    unresolved_flag_count: int
+
+
+# --- Billing (spec Section 7) -------------------------------------------------
+
+class CheckoutRequest(BaseModel):
+    plan_tier: str
+    success_url: str
+    cancel_url: str
+
+
+class CheckoutResponse(BaseModel):
+    checkout_url: str
+
+
+class BillingPortalRequest(BaseModel):
+    return_url: str
+
+
+class BillingPortalResponse(BaseModel):
+    portal_url: str
+
+
+class SubscriptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    plan_tier: str
+    status: str
+    mrr: float
+    renewed_at: datetime | None
+    created_at: datetime
+
+
+class ResolvedFeatureFlags(BaseModel):
+    flags: dict[str, bool]
+
+
+# --- Phase 2 competitor-parity features ---------------------------------------
+
+class DORAMetrics(BaseModel):
+    period_start: datetime
+    period_end: datetime
+    deployed_pr_count: int
+    deployment_frequency_per_day: float
+    lead_time_for_changes_hours: float | None
+    # Both null on purpose — VeriSprint has no deployment/incident tracking to
+    # compute these honestly from. Never a guessed number.
+    change_failure_rate: None = None
+    mean_time_to_restore_hours: None = None
+    unavailable_metrics_note: str = (
+        "Change Failure Rate and Mean Time to Restore require deployment/incident "
+        "tracking, which isn't connected — shown as unavailable rather than guessed."
+    )
+
+
+class ChangelogDay(BaseModel):
+    day: datetime
+    merged_pr_count: int
+    commit_count: int
+    entries: list[str]
+
+
+class CodeHealthSignals(BaseModel):
+    period_start: datetime
+    period_end: datetime
+    total_evidence_items: int
+    test_added_count: int
+    test_missing_count: int
+    dead_code_count: int
+    todo_count: int
+    risk_count: int
+    health_score: float | None
+
+
+class ContributorStat(BaseModel):
+    author_github_login: str
+    commit_count: int
+    ai_assisted_commit_count: int
+    ai_assisted_pct: float
+
+
+class ContributionReport(BaseModel):
+    period_start: datetime
+    period_end: datetime
+    contributors: list[ContributorStat]
+    method_note: str = "Detected via self-disclosed AI attribution in commit messages (e.g. Co-Authored-By trailers) — not a behavioral guess."
+
+
+class AllocationEntry(BaseModel):
+    label: str
+    commit_count: int
+    additions: int
+    deletions: int
+    pct_of_commits: float
+
+
+class AllocationReport(BaseModel):
+    period_start: datetime
+    period_end: datetime
+    by_repo: list[AllocationEntry]
+    by_person: list[AllocationEntry]
+
+
+class RiskRadar(BaseModel):
+    repo_id: uuid.UUID
+    open_flags_by_type: dict[str, int]
+    low_confidence_ticket_count: int
+    stale_in_progress_ticket_count: int
+    risk_score: float
+
+
+class TeamGoalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    repo_id: uuid.UUID | None
+    name: str
+    metric_key: str
+    target_value: float
+    period_start: datetime
+    period_end: datetime
+    current_value: float | None = None
+    progress_pct: float | None = None
+    created_at: datetime
+
+
+class TeamGoalCreate(BaseModel):
+    name: str
+    repo_id: uuid.UUID | None = None
+    metric_key: str
+    target_value: float
+    period_start: datetime
+    period_end: datetime
+
+
+class IntegrationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    provider: str
+    status: str
+    connected_at: datetime | None
+    created_at: datetime
+
+
+class IntegrationConnectRequest(BaseModel):
+    provider: str
+    config: dict = {}
+
+
+# --- Phase 3 competitor-parity features ---------------------------------------
+
+class ValueStreamStage(BaseModel):
+    status: str
+    avg_hours: float
+    sample_count: int
+
+
+class ValueStreamReport(BaseModel):
+    period_start: datetime
+    period_end: datetime
+    stages: list[ValueStreamStage]
+    tracked_ticket_count: int
+
+
+class ReviewerSuggestion(BaseModel):
+    file_path: str
+    suggested_reviewers: list[str]
+    basis: str
+
+
+class PRAutoRouteResult(BaseModel):
+    pr_number: int
+    suggestions: list[ReviewerSuggestion]
+    top_suggested_reviewers: list[str]
+
+
+class ForecastPoint(BaseModel):
+    date: datetime
+    projected_confidence_weighted_complete: float
+
+
+class DeliveryForecast(BaseModel):
+    sprint_id: uuid.UUID
+    method: str = (
+        "Linear projection of the sprint's own confidence-weighted burndown velocity so far — "
+        "a real statistical trend line, not a trained ML model."
+    )
+    current_confidence_weighted_complete: float
+    planned_tickets: int
+    velocity_per_day: float | None
+    projected_completion_date: datetime | None
+    projection_note: str | None = None
+
+
+class CapitalizationEntry(BaseModel):
+    category: str  # "capitalizable_new_development" | "non_capitalizable_maintenance"
+    ticket_count: int
+    commit_count: int
+    estimated_hours: float
+    estimated_cost_usd: float | None
+
+
+class CapitalizationReport(BaseModel):
+    period_start: datetime
+    period_end: datetime
+    hourly_rate_usd: float | None
+    entries: list[CapitalizationEntry]
+    method_note: str = (
+        "Tickets are classified by real title/description keywords (bug|fix|hotfix|chore vs. "
+        "feature|add|implement); hours are estimated from real commit volume in the period. "
+        "Dollar figures stay null until an hourly rate is configured in Settings."
+    )
+
+
+class PulseSurveyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    question: str
+    closes_at: datetime | None
+    response_count: int = 0
+    average_score: float | None = None
+    created_at: datetime
+
+
+class PulseSurveyCreate(BaseModel):
+    question: str
+    closes_at: datetime | None = None
+
+
+class PulseSurveyResponseCreate(BaseModel):
+    score: int = Field(ge=1, le=5)
+    comment: str | None = None
+
+
+class WorkingAgreementOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    repo_id: uuid.UUID | None
+    title: str
+    body_markdown: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class WorkingAgreementUpsert(BaseModel):
+    repo_id: uuid.UUID | None = None
+    body_markdown: str
+
+
+class WorkspaceSSOConfigOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    issuer: str
+    client_id: str
+    enabled: bool
+    has_scim_token: bool
+    created_at: datetime
+
+
+class WorkspaceSSOConfigUpsert(BaseModel):
+    issuer: str
+    client_id: str
+    client_secret: str
+    enabled: bool = True

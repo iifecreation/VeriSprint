@@ -6,13 +6,13 @@ whose commits genuinely span more than one repo are surfaced — a single-repo
 ticket isn't "multi-repo intelligence," it's just a ticket.
 """
 from collections import defaultdict
-from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Commit, Repo
+from app.auth.dependencies import get_workspace_for_user
+from app.db.models import Commit, Repo, Workspace
 from app.db.session import get_db
 from app.schemas import LogicalWorkUnit
 
@@ -20,8 +20,10 @@ router = APIRouter(prefix="/work-units", tags=["multi-repo"])
 
 
 @router.get("", response_model=list[LogicalWorkUnit])
-async def list_logical_work_units(installation_id: UUID, db: AsyncSession = Depends(get_db)) -> list[LogicalWorkUnit]:
-    repos_result = await db.execute(select(Repo).where(Repo.installation_id == installation_id))
+async def list_logical_work_units(
+    workspace: Workspace = Depends(get_workspace_for_user), db: AsyncSession = Depends(get_db)
+) -> list[LogicalWorkUnit]:
+    repos_result = await db.execute(select(Repo).where(Repo.workspace_id == workspace.id))
     repos = list(repos_result.scalars().all())
     repo_by_id = {r.id: r for r in repos}
     if not repo_by_id:
