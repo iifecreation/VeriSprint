@@ -1,0 +1,88 @@
+"use client";
+
+import { useState } from "react";
+import { api, type EvidenceItem } from "@/lib/api";
+import { RepoPicker } from "@/components/RepoPicker";
+
+type Exchange = { question: string; answer: string; citations: EvidenceItem[] };
+
+/** AI Repo Chat ("Ask Your Codebase") — spec Section 5.1. */
+export default function ChatPage() {
+  const [repoId, setRepoId] = useState<string | null>(null);
+  const [question, setQuestion] = useState("");
+  const [exchanges, setExchanges] = useState<Exchange[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleAsk() {
+    if (!repoId || !question.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api.repoChat(repoId, question.trim());
+      setExchanges((prev) => [...prev, { question: question.trim(), answer: result.answer, citations: result.citations }]);
+      setQuestion("");
+    } catch {
+      setError("Couldn't reach the API — check ANTHROPIC_API_KEY is configured server-side.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Ask Your Codebase</h1>
+          <p className="mt-1 text-sm text-gray-500">Plain-English questions over real commit history, with citations.</p>
+        </div>
+        <RepoPicker selectedRepoId={repoId} onChange={setRepoId} />
+      </div>
+
+      <div className="mt-6 space-y-4">
+        {exchanges.map((ex, i) => (
+          <div key={i} className="space-y-2">
+            <div className="ml-auto max-w-md rounded-lg bg-gray-900 px-3 py-2 text-sm text-white">{ex.question}</div>
+            <div className="max-w-lg rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800">
+              <p className="whitespace-pre-wrap">{ex.answer}</p>
+              {ex.citations.length > 0 && (
+                <ul className="mt-2 space-y-1 border-t border-gray-100 pt-2 text-xs text-gray-500">
+                  {ex.citations.map((c) => (
+                    <li key={c.id}>
+                      [{c.id.slice(0, 8)}] {c.description}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        ))}
+        {exchanges.length === 0 && (
+          <p className="text-sm text-gray-500">
+            Try: &ldquo;What shipped this week?&rdquo; or &ldquo;Did we finish the login flow?&rdquo;
+          </p>
+        )}
+      </div>
+
+      {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+
+      <div className="mt-6 flex gap-2">
+        <input
+          className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+          placeholder="Ask a question about this repo..."
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAsk()}
+          disabled={!repoId}
+        />
+        <button
+          onClick={handleAsk}
+          disabled={!repoId || !question.trim() || loading}
+          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
+          {loading ? "Asking…" : "Ask"}
+        </button>
+      </div>
+    </div>
+  );
+}

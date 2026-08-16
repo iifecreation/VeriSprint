@@ -1,0 +1,26 @@
+# Env
+.env
+.env.local
+*.env
+
+# Node / Next.js
+node_modules/
+apps/web/.next/
+apps/web/out/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+apps/api/.local_object_storage/
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
