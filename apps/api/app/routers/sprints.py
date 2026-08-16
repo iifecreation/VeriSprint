@@ -11,21 +11,41 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ConfidenceScore, Sprint, Ticket
+from app.auth.dependencies import ensure_workspace_access, get_internal_user, get_repo_for_user
+from app.db.models import ConfidenceScore, Repo, Sprint, Ticket, User
 from app.db.session import get_db
 from app.schemas import BurndownOut, BurndownPoint, SprintCreate, SprintOut
 
 router = APIRouter(prefix="/sprints", tags=["sprints"])
 
 
+async def _sprint_for_user(
+    sprint_id: UUID, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
+) -> Sprint:
+    sprint = await db.get(Sprint, sprint_id)
+    if sprint is None:
+        raise HTTPException(status_code=404, detail="Sprint not found")
+    repo = await db.get(Repo, sprint.repo_id)
+    if repo is not None:
+        ensure_workspace_access(user, repo.workspace_id)
+    return sprint
+
+
 @router.get("", response_model=list[SprintOut])
-async def list_sprints(repo_id: UUID, db: AsyncSession = Depends(get_db)) -> list[Sprint]:
-    result = await db.execute(select(Sprint).where(Sprint.repo_id == repo_id).order_by(Sprint.start_date.desc()))
+async def list_sprints(repo: Repo = Depends(get_repo_for_user), db: AsyncSession = Depends(get_db)) -> list[Sprint]:
+    result = await db.execute(select(Sprint).where(Sprint.repo_id == repo.id).order_by(Sprint.start_date.desc()))
     return list(result.scalars().all())
 
 
 @router.post("", response_model=SprintOut)
-async def create_sprint(payload: SprintCreate, db: AsyncSession = Depends(get_db)) -> Sprint:
+async def create_sprint(
+    payload: SprintCreate, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
+) -> Sprint:
+    repo = await db.get(Repo, payload.repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="Repo not found")
+    ensure_workspace_access(user, repo.workspace_id)
+
     sprint = Sprint(**payload.model_dump())
     db.add(sprint)
     await db.commit()
@@ -34,19 +54,12 @@ async def create_sprint(payload: SprintCreate, db: AsyncSession = Depends(get_db
 
 
 @router.get("/{sprint_id}", response_model=SprintOut)
-async def get_sprint(sprint_id: UUID, db: AsyncSession = Depends(get_db)) -> Sprint:
-    sprint = await db.get(Sprint, sprint_id)
-    if sprint is None:
-        raise HTTPException(status_code=404, detail="Sprint not found")
+async def get_sprint(sprint: Sprint = Depends(_sprint_for_user)) -> Sprint:
     return sprint
 
 
 @router.get("/{sprint_id}/burndown", response_model=BurndownOut)
-async def get_burndown(sprint_id: UUID, db: AsyncSession = Depends(get_db)) -> BurndownOut:
-    sprint = await db.get(Sprint, sprint_id)
-    if sprint is None:
-        raise HTTPException(status_code=404, detail="Sprint not found")
-
+async def get_burndown(sprint: Sprint = Depends(_sprint_for_user), db: AsyncSession = Depends(get_db)) -> BurndownOut:
     ticket_ids: list[UUID] = []
     for key in sprint.planned_ticket_keys:
         result = await db.execute(select(Ticket).where(Ticket.repo_id == sprint.repo_id, Ticket.key == key))

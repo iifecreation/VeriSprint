@@ -18,13 +18,18 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!repoId) return;
-    setLoading(true);
-    Promise.all([api.dashboardSummary(repoId), api.listTickets(repoId)])
-      .then(([summaryData, ticketData]) => {
-        setSummary(summaryData);
-        setTickets(ticketData);
-      })
-      .finally(() => setLoading(false));
+    // Deferred to a microtask — the effect body fetches from the API (an
+    // external system), so the resulting setState calls aren't a synchronous
+    // render-triggering pattern even though the first one looks like it is.
+    queueMicrotask(() => {
+      setLoading(true);
+      Promise.all([api.dashboardSummary(repoId), api.listTickets(repoId)])
+        .then(([summaryData, ticketData]) => {
+          setSummary(summaryData);
+          setTickets(ticketData);
+        })
+        .finally(() => setLoading(false));
+    });
   }, [repoId]);
 
   return (

@@ -2,39 +2,42 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit import record_audit
+from app.audit import record_audit_for_user
+from app.auth.dependencies import get_workspace_for_user, require_role
+from app.db.models import User, UserRole, Workspace
 from app.db.session import get_db
 from app.schemas import WorkspaceSettingsOut, WorkspaceSettingsUpdate
-from app.workspace_settings import get_or_create_workspace_settings
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
 @router.get("", response_model=WorkspaceSettingsOut)
-async def get_settings_endpoint(db: AsyncSession = Depends(get_db)):
-    ws = await get_or_create_workspace_settings(db)
-    await db.commit()
-    return ws
+async def get_settings_endpoint(workspace: Workspace = Depends(get_workspace_for_user)):
+    return workspace
 
 
 @router.put("", response_model=WorkspaceSettingsOut)
-async def update_settings_endpoint(payload: WorkspaceSettingsUpdate, db: AsyncSession = Depends(get_db)):
-    ws = await get_or_create_workspace_settings(db)
+async def update_settings_endpoint(
+    payload: WorkspaceSettingsUpdate,
+    workspace: Workspace = Depends(get_workspace_for_user),
+    user: User = Depends(require_role(UserRole.WORKSPACE_ADMIN)),
+    db: AsyncSession = Depends(get_db),
+):
     before = {
-        "name": ws.name,
-        "logo_url": ws.logo_url,
-        "primary_color_hex": ws.primary_color_hex,
-        "avg_standup_minutes": ws.avg_standup_minutes,
-        "hourly_rate_usd": ws.hourly_rate_usd,
+        "name": workspace.name,
+        "logo_url": workspace.logo_url,
+        "primary_color_hex": workspace.primary_color_hex,
+        "avg_standup_minutes": workspace.avg_standup_minutes,
+        "hourly_rate_usd": workspace.hourly_rate_usd,
     }
     updates = payload.model_dump(exclude_unset=True)
     for field, value in updates.items():
-        setattr(ws, field, value)
+        setattr(workspace, field, value)
     await db.flush()
-    await record_audit(
-        db, actor="user", action="workspace_settings.updated", entity_type="workspace_settings",
-        entity_id=str(ws.id), before=before, after=updates,
+    await record_audit_for_user(
+        db, user=user, action="workspace.settings_updated", entity_type="workspace",
+        entity_id=str(workspace.id), before=before, after=updates,
     )
     await db.commit()
-    await db.refresh(ws)
-    return ws
+    await db.refresh(workspace)
+    return workspace

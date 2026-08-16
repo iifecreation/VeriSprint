@@ -10,8 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit import record_audit
-from app.db.models import ReconciliationFlag
+from app.audit import record_audit_for_user
+from app.auth.dependencies import ensure_workspace_access, get_internal_user, get_repo_for_user
+from app.db.models import ReconciliationFlag, Repo, User
 from app.db.session import get_db
 from app.schemas import ReconciliationFlagOut
 
@@ -20,14 +21,14 @@ router = APIRouter(prefix="/flags", tags=["flags"])
 
 @router.get("", response_model=list[ReconciliationFlagOut])
 async def list_flags(
-    repo_id: UUID | None = None,
     flag_type: str | None = None,
     include_resolved: bool = False,
+    repo: Repo = Depends(get_repo_for_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[ReconciliationFlag]:
-    stmt = select(ReconciliationFlag).order_by(ReconciliationFlag.created_at.desc())
-    if repo_id is not None:
-        stmt = stmt.where(ReconciliationFlag.repo_id == repo_id)
+    stmt = select(ReconciliationFlag).where(ReconciliationFlag.repo_id == repo.id).order_by(
+        ReconciliationFlag.created_at.desc()
+    )
     if flag_type is not None:
         stmt = stmt.where(ReconciliationFlag.flag_type == flag_type)
     if not include_resolved:
@@ -37,20 +38,22 @@ async def list_flags(
 
 
 @router.post("/{flag_id}/resolve", response_model=ReconciliationFlagOut)
-async def resolve_flag(flag_id: UUID, db: AsyncSession = Depends(get_db)) -> ReconciliationFlag:
+async def resolve_flag(
+    flag_id: UUID, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
+) -> ReconciliationFlag:
     flag = await db.get(ReconciliationFlag, flag_id)
     if flag is None:
         raise HTTPException(status_code=404, detail="Flag not found")
+    if flag.repo_id is not None:
+        repo = await db.get(Repo, flag.repo_id)
+        if repo is not None:
+            ensure_workspace_access(user, repo.workspace_id)
+
     flag.is_resolved = True
     await db.flush()
-    await record_audit(
-        db,
-        actor="user",
-        action="reconciliation_flag.resolved",
-        entity_type="reconciliation_flag",
-        entity_id=str(flag.id),
-        repo_id=flag.repo_id,
-        after={"flag_type": flag.flag_type.value},
+    await record_audit_for_user(
+        db, user=user, action="reconciliation_flag.resolved", entity_type="reconciliation_flag",
+        entity_id=str(flag.id), repo_id=flag.repo_id, after={"flag_type": flag.flag_type.value},
     )
     await db.commit()
     await db.refresh(flag)

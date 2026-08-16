@@ -77,8 +77,15 @@ class Settings(BaseSettings):
     aws_access_key_id: str = Field(default="", alias="AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = Field(default="", alias="AWS_SECRET_ACCESS_KEY")
 
-    # Auth
+    # Auth (spec Section 6: JWT access + refresh, workspace_id embedded, RBAC)
     session_secret: str = Field(default="dev-secret-change-me", alias="SESSION_SECRET")
+    jwt_secret: str = Field(default="dev-jwt-secret-change-me", alias="JWT_SECRET")
+    jwt_issuer: str = Field(default="verisprint", alias="JWT_ISSUER")
+    jwt_access_ttl_minutes: int = Field(default=15, alias="JWT_ACCESS_TTL_MINUTES")
+    jwt_refresh_ttl_days: int = Field(default=30, alias="JWT_REFRESH_TTL_DAYS")
+    # Where OAuth/SSO callbacks hand tokens to the SPA (URL fragment, never a query
+    # string — fragments aren't sent to the server or logged in access logs).
+    frontend_auth_callback_path: str = Field(default="/auth/callback", alias="FRONTEND_AUTH_CALLBACK_PATH")
 
     # SSO (Enterprise tier) — generic OIDC. Unset by default; GitHub OAuth
     # remains the primary login path until a customer's IdP is configured.
@@ -86,6 +93,22 @@ class Settings(BaseSettings):
     oidc_client_id: str = Field(default="", alias="OIDC_CLIENT_ID")
     oidc_client_secret: str = Field(default="", alias="OIDC_CLIENT_SECRET")
     oidc_redirect_url: str = Field(default="", alias="OIDC_REDIRECT_URL")
+
+    # Observability (spec Section 7): Sentry is optional — unset SENTRY_DSN
+    # disables it entirely, and app/observability.py's ErrorEvent/SystemMetric
+    # pipeline (the Super-Admin Dashboard's actual data source) runs either way.
+    sentry_dsn: str = Field(default="", alias="SENTRY_DSN")
+    sentry_traces_sample_rate: float = Field(default=0.1, alias="SENTRY_TRACES_SAMPLE_RATE")
+
+    # Billing (spec Section 7) — Stripe Checkout + Customer Portal + webhooks.
+    # Self-serve tiers only (team/growth/agency); ENTERPRISE is sales-assisted,
+    # provisioned manually via the Super-Admin Dashboard, never through checkout.
+    stripe_secret_key: str = Field(default="", alias="STRIPE_SECRET_KEY")
+    stripe_publishable_key: str = Field(default="", alias="STRIPE_PUBLISHABLE_KEY")
+    stripe_webhook_secret: str = Field(default="", alias="STRIPE_WEBHOOK_SECRET")
+    stripe_price_id_team: str = Field(default="", alias="STRIPE_PRICE_ID_TEAM")
+    stripe_price_id_growth: str = Field(default="", alias="STRIPE_PRICE_ID_GROWTH")
+    stripe_price_id_agency: str = Field(default="", alias="STRIPE_PRICE_ID_AGENCY")
 
 
 @lru_cache

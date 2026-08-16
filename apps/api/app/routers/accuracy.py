@@ -16,7 +16,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ConfidenceScore, ReconciliationFlag, Ticket
+from app.auth.dependencies import get_repo_for_user
+from app.db.models import ConfidenceScore, ReconciliationFlag, Repo, Ticket
 from app.db.session import get_db
 from app.schemas import AccuracyPoint
 
@@ -27,12 +28,12 @@ ACCURATE_SCORE_THRESHOLD = 70
 
 @router.get("", response_model=list[AccuracyPoint])
 async def get_historical_accuracy(
-    repo_id: UUID, person: str | None = None, db: AsyncSession = Depends(get_db)
+    person: str | None = None, repo: Repo = Depends(get_repo_for_user), db: AsyncSession = Depends(get_db)
 ) -> list[AccuracyPoint]:
     result = await db.execute(
         select(ConfidenceScore, Ticket)
         .join(Ticket, ConfidenceScore.ticket_id == Ticket.id)
-        .where(Ticket.repo_id == repo_id, Ticket.assignee_github_login.is_not(None))
+        .where(Ticket.repo_id == repo.id, Ticket.assignee_github_login.is_not(None))
     )
     rows = result.all()
     if person:

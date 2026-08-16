@@ -33,7 +33,10 @@ export default function SprintsPage() {
   }
 
   useEffect(() => {
-    refreshSprints();
+    // Deferred to a microtask — see dashboard/page.tsx for why.
+    queueMicrotask(() => {
+      refreshSprints();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoId]);
 

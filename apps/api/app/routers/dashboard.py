@@ -6,33 +6,32 @@ across the team" (PM) vs. "your own tickets" (developer) framing on top of the
 same TicketOut payload from `tickets.py`. This router adds the aggregate
 summary used for the dashboard header cards.
 """
-from uuid import UUID
-
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ConfidenceScore, ReconciliationFlag, Ticket
+from app.auth.dependencies import get_repo_for_user
+from app.db.models import ConfidenceScore, ReconciliationFlag, Repo, Ticket
 from app.db.session import get_db
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 @router.get("/summary")
-async def dashboard_summary(repo_id: UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def dashboard_summary(repo: Repo = Depends(get_repo_for_user), db: AsyncSession = Depends(get_db)) -> dict:
     ticket_count = await db.scalar(
-        select(func.count()).select_from(Ticket).where(Ticket.repo_id == repo_id)
+        select(func.count()).select_from(Ticket).where(Ticket.repo_id == repo.id)
     )
     avg_confidence = await db.scalar(
         select(func.avg(ConfidenceScore.score))
         .join(Ticket, Ticket.id == ConfidenceScore.ticket_id)
-        .where(Ticket.repo_id == repo_id)
+        .where(Ticket.repo_id == repo.id)
     )
     open_flags = await db.scalar(
         select(func.count())
         .select_from(ReconciliationFlag)
         .join(Ticket, Ticket.id == ReconciliationFlag.ticket_id)
-        .where(Ticket.repo_id == repo_id, ReconciliationFlag.is_resolved.is_(False))
+        .where(Ticket.repo_id == repo.id, ReconciliationFlag.is_resolved.is_(False))
     )
     return {
         "ticket_count": ticket_count or 0,

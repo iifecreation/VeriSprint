@@ -7,6 +7,8 @@
 node_modules/
 apps/web/.next/
 apps/web/out/
+apps/marketing/.next/
+apps/marketing/out/
 npm-debug.log*
 
 # Python

@@ -18,4 +18,5 @@ async def run_daily_maintenance(ctx) -> None:
     for repo in repos:
         await enqueue("detect_orphan_commits", str(repo.id))
         await enqueue("detect_activity_anomalies", str(repo.id))
+        await enqueue("detect_blockers", str(repo.id))
         await enqueue("send_daily_digest", str(repo.id), yesterday)

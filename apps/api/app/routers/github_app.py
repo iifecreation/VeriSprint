@@ -4,6 +4,9 @@ GitHub App install flow + webhook receiver (Step 1-2).
 Read-only scopes only for MVP: Contents (read), Metadata (read), Pull requests
 (read). Webhook events (push, pull_request) enqueue ingestion jobs rather than
 doing the fetch inline, so we ack GitHub fast and let the worker do the I/O.
+
+A new GitHub App installation creates a new Workspace (spec Section 11) —
+one tenant per installed account/org.
 """
 import hashlib
 import hmac
@@ -13,8 +16,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import record_audit
 from app.config import get_settings
-from app.db.models import Installation, Repo
+from app.db.models import Repo, User, UserRole, Workspace, WorkspaceStatus
 from app.db.session import get_db
 from app.queue.client import enqueue
 
@@ -44,8 +48,12 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)) -
 
     if event == "installation" and body.get("action") == "created":
         await _handle_installation_created(db, body)
+    elif event == "installation" and body.get("action") == "deleted":
+        await _handle_installation_deleted(db, body)
+    elif event == "installation" and body.get("action") in ("suspend", "unsuspend"):
+        await _handle_installation_suspend_toggle(db, body)
     elif event == "installation_repositories":
-        await _handle_repos_added(db, body)
+        await _handle_installation_repositories(db, body)
     elif event == "push":
         await enqueue("ingest_push", body)
     elif event == "pull_request":
@@ -57,37 +65,138 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)) -
 async def _handle_installation_created(db: AsyncSession, body: dict) -> None:
     installation = body["installation"]
     result = await db.execute(
-        select(Installation).where(
-            Installation.github_installation_id == installation["id"]
-        )
+        select(Workspace).where(Workspace.github_installation_id == installation["id"])
     )
-    if result.scalar_one_or_none() is None:
-        db.add(
-            Installation(
-                github_installation_id=installation["id"],
-                account_login=installation["account"]["login"],
-            )
-        )
-        await db.commit()
-
-
-async def _handle_repos_added(db: AsyncSession, body: dict) -> None:
-    result = await db.execute(
-        select(Installation).where(
-            Installation.github_installation_id == body["installation"]["id"]
-        )
-    )
-    installation = result.scalar_one_or_none()
-    if installation is None:
+    if result.scalar_one_or_none() is not None:
         return
-    for repo in body.get("repositories_added", []):
+
+    account_login = installation["account"]["login"]
+    workspace = Workspace(
+        name=account_login,
+        github_installation_id=installation["id"],
+        account_login=account_login,
+    )
+    db.add(workspace)
+    await db.flush()  # populate workspace.id (client-side uuid4 default) for the FK below
+
+    # The webhook's top-level `sender` is whoever clicked "Install" — link them
+    # as the workspace's first WORKSPACE_ADMIN so RBAC has an owner from minute
+    # one, without waiting on a separate GitHub OAuth login round trip.
+    sender = body.get("sender") or {}
+    installer_github_id = sender.get("id")
+    if installer_github_id:
+        result = await db.execute(select(User).where(User.github_id == installer_github_id))
+        installer = result.scalar_one_or_none()
+        if installer is None:
+            installer = User(
+                github_id=installer_github_id,
+                github_login=sender.get("login"),
+                avatar_url=sender.get("avatar_url"),
+                role=UserRole.WORKSPACE_ADMIN,
+                workspace_id=workspace.id,
+            )
+            db.add(installer)
+        elif installer.workspace_id is None:
+            installer.workspace_id = workspace.id
+            installer.role = UserRole.WORKSPACE_ADMIN
+        await db.flush()
+        workspace.installed_by_user_id = installer.id
+
+    await record_audit(
+        db, actor=sender.get("login", "github-webhook"), workspace_id=workspace.id,
+        action="integration.github_app_connected", entity_type="workspace", entity_id=str(workspace.id),
+        after={"account_login": account_login, "github_installation_id": installation["id"]},
+    )
+    await db.commit()
+
+
+async def _handle_installation_deleted(db: AsyncSession, body: dict) -> None:
+    """GitHub App uninstalled — we lose repo access entirely. Suspend the
+    workspace (not delete it) so its history/reports/audit trail survive a
+    reinstall, per the append-only audit trail guarantee."""
+    installation = body["installation"]
+    result = await db.execute(select(Workspace).where(Workspace.github_installation_id == installation["id"]))
+    workspace = result.scalar_one_or_none()
+    if workspace is None:
+        return
+
+    before = {"status": workspace.status.value}
+    workspace.status = WorkspaceStatus.SUSPENDED
+    repos_result = await db.execute(select(Repo).where(Repo.workspace_id == workspace.id))
+    for repo in repos_result.scalars().all():
+        repo.is_active = False
+
+    sender = body.get("sender") or {}
+    await record_audit(
+        db, actor=sender.get("login", "github-webhook"), workspace_id=workspace.id,
+        action="integration.github_app_disconnected", entity_type="workspace", entity_id=str(workspace.id),
+        before=before, after={"status": workspace.status.value},
+    )
+    await db.commit()
+
+
+async def _handle_installation_suspend_toggle(db: AsyncSession, body: dict) -> None:
+    installation = body["installation"]
+    result = await db.execute(select(Workspace).where(Workspace.github_installation_id == installation["id"]))
+    workspace = result.scalar_one_or_none()
+    if workspace is None:
+        return
+
+    before = {"status": workspace.status.value}
+    workspace.status = (
+        WorkspaceStatus.SUSPENDED if body.get("action") == "suspend" else WorkspaceStatus.ACTIVE
+    )
+    sender = body.get("sender") or {}
+    await record_audit(
+        db, actor=sender.get("login", "github-webhook"), workspace_id=workspace.id,
+        action=f"integration.github_app_{body.get('action')}ed", entity_type="workspace", entity_id=str(workspace.id),
+        before=before, after={"status": workspace.status.value},
+    )
+    await db.commit()
+
+
+async def _handle_installation_repositories(db: AsyncSession, body: dict) -> None:
+    result = await db.execute(
+        select(Workspace).where(Workspace.github_installation_id == body["installation"]["id"])
+    )
+    workspace = result.scalar_one_or_none()
+    if workspace is None:
+        return
+
+    sender = body.get("sender") or {}
+    added = body.get("repositories_added", [])
+    for repo in added:
         db.add(
             Repo(
-                installation_id=installation.id,
+                workspace_id=workspace.id,
                 github_repo_id=repo["id"],
                 full_name=repo["full_name"],
             )
         )
+    if added:
+        await record_audit(
+            db, actor=sender.get("login", "github-webhook"), workspace_id=workspace.id,
+            action="integration.repos_added", entity_type="workspace", entity_id=str(workspace.id),
+            after={"full_names": [r["full_name"] for r in added]},
+        )
+
+    removed = body.get("repositories_removed", [])
+    if removed:
+        removed_github_ids = {r["id"] for r in removed}
+        existing_result = await db.execute(
+            select(Repo).where(Repo.workspace_id == workspace.id, Repo.github_repo_id.in_(removed_github_ids))
+        )
+        removed_full_names = []
+        for repo in existing_result.scalars().all():
+            repo.is_active = False
+            removed_full_names.append(repo.full_name)
+        if removed_full_names:
+            await record_audit(
+                db, actor=sender.get("login", "github-webhook"), workspace_id=workspace.id,
+                action="integration.repos_removed", entity_type="workspace", entity_id=str(workspace.id),
+                after={"full_names": removed_full_names},
+            )
+
     await db.commit()
 
 

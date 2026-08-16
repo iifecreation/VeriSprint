@@ -22,7 +22,6 @@ export default function RoiPage() {
 
   useEffect(() => {
     if (repoId) api.getRoi(repoId, `${start}T00:00:00Z`, `${end}T23:59:59Z`).then(setSummary);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoId, start, end]);
 
   return (

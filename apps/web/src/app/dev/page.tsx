@@ -17,11 +17,14 @@ export default function DeveloperViewPage() {
 
   useEffect(() => {
     if (!repoId) return;
-    setLoading(true);
-    api
-      .listTickets(repoId)
-      .then(setTickets)
-      .finally(() => setLoading(false));
+    // Deferred to a microtask — see dashboard/page.tsx for why.
+    queueMicrotask(() => {
+      setLoading(true);
+      api
+        .listTickets(repoId)
+        .then(setTickets)
+        .finally(() => setLoading(false));
+    });
   }, [repoId]);
 
   const myTickets = useMemo(

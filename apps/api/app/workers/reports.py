@@ -170,10 +170,10 @@ async def generate_onboarding_doc(ctx, repo_id: str, report_id: str) -> None:
         if report is None or repo is None:
             return
         try:
-            from app.db.models import Installation
+            from app.db.models import Workspace
 
-            installation = await db.get(Installation, repo.installation_id)
-            tree = fetch_repo_tree(installation.github_installation_id, repo.full_name, repo.default_branch)
+            workspace = await db.get(Workspace, repo.workspace_id)
+            tree = fetch_repo_tree(workspace.github_installation_id, repo.full_name, repo.default_branch)
 
             recent_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
             recent_start = recent_start.replace(day=max(1, recent_start.day - 30))

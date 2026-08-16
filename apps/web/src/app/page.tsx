@@ -29,7 +29,7 @@ export default function HomePage() {
       </div>
 
       <p className="mt-6 text-xs text-gray-400">
-        "Connect a GitHub repo" redirects to the API's GitHub App install endpoint — needs
+        &quot;Connect a GitHub repo&quot; redirects to the API&apos;s GitHub App install endpoint — needs
         GITHUB_APP_ID configured server-side.
       </p>
     </div>
