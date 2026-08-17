@@ -37,7 +37,7 @@ async def _ticket_for_user(
 
 @router.get("", response_model=list[TicketOut])
 async def list_tickets(repo: Repo = Depends(get_repo_for_user), db: AsyncSession = Depends(get_db)) -> list[dict]:
-    result = await db.execute(select(Ticket).where(Ticket.repo_id == repo.id))
+    result = await db.execute(select(Ticket).where(Ticket.repo_id == repo.id).order_by(Ticket.key).limit(1000))
     tickets = result.scalars().all()
     return [await _to_ticket_out(db, t) for t in tickets]
 

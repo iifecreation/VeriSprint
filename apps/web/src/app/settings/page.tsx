@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type WorkspaceSettings } from "@/lib/api";
-import { decodeAccessTokenClaims } from "@/lib/auth";
+import { api, type Integration, type WorkspaceSSOConfig, type WorkspaceSettings } from "@/lib/api";
+import { useAccessTokenClaims } from "@/lib/auth";
+import { Badge, Card, Input, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
+
+const KNOWN_PROVIDERS = ["linear", "jira", "pagerduty", "datadog", "opsgenie"] as const;
 
 /** Workspace settings: white-label branding + ROI calculator inputs. */
 export default function SettingsPage() {
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
   const [saved, setSaved] = useState(false);
-  const workspaceId = decodeAccessTokenClaims()?.workspace_id ?? null;
+  const workspaceId = useAccessTokenClaims()?.workspace_id ?? null;
 
   useEffect(() => {
     if (workspaceId) api.getSettings(workspaceId).then(setSettings);
@@ -28,49 +31,239 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2000);
   }
 
-  if (!workspaceId) return <div className="mx-auto max-w-lg px-4 py-8 text-sm text-gray-400">Sign in to a workspace to manage settings.</div>;
-  if (!settings) return <div className="mx-auto max-w-lg px-4 py-8 text-sm text-gray-400">Loading…</div>;
+  if (!workspaceId) return <div className="mx-auto max-w-lg px-6 py-16 text-sm text-slate-400">Sign in to a workspace to manage settings.</div>;
+  if (!settings) return <div className="mx-auto max-w-lg px-6 py-16 text-sm text-slate-400">Loading…</div>;
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-8">
-      <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
+    <div className="mx-auto max-w-lg px-6 py-10">
+      <PageHeader title="Settings" subtitle="White-label branding for the Client Portal, plus the inputs the ROI calculator uses." />
 
-      <div className="mt-6 space-y-4 rounded-lg border border-gray-200 bg-white p-5">
+      <Card className="mt-8 space-y-5">
         <Field label="Workspace / agency name (Client Portal branding)">
-          <input className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm" value={settings.name} onChange={(e) => setSettings({ ...settings, name: e.target.value })} />
+          <Input className="w-full" value={settings.name} onChange={(e) => setSettings({ ...settings, name: e.target.value })} />
         </Field>
         <Field label="Logo URL">
-          <input className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm" value={settings.logo_url ?? ""} onChange={(e) => setSettings({ ...settings, logo_url: e.target.value || null })} />
+          <Input className="w-full" value={settings.logo_url ?? ""} onChange={(e) => setSettings({ ...settings, logo_url: e.target.value || null })} />
         </Field>
         <Field label="Primary color">
-          <input type="color" className="h-9 w-16 rounded border border-gray-300" value={settings.primary_color_hex} onChange={(e) => setSettings({ ...settings, primary_color_hex: e.target.value })} />
+          <input
+            type="color"
+            className="h-10 w-16 rounded-lg border border-slate-300"
+            value={settings.primary_color_hex}
+            onChange={(e) => setSettings({ ...settings, primary_color_hex: e.target.value })}
+          />
         </Field>
         <Field label="Average standup length (minutes) — used by the ROI calculator">
-          <input type="number" className="w-24 rounded-md border border-gray-300 px-3 py-1.5 text-sm" value={settings.avg_standup_minutes} onChange={(e) => setSettings({ ...settings, avg_standup_minutes: Number(e.target.value) })} />
+          <Input type="number" className="w-24" value={settings.avg_standup_minutes} onChange={(e) => setSettings({ ...settings, avg_standup_minutes: Number(e.target.value) })} />
         </Field>
         <Field label="Hourly rate (USD) — leave blank to keep dollar figures hidden everywhere">
-          <input
+          <Input
             type="number"
-            className="w-32 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+            className="w-32"
             value={settings.hourly_rate_usd ?? ""}
             onChange={(e) => setSettings({ ...settings, hourly_rate_usd: e.target.value ? Number(e.target.value) : null })}
           />
         </Field>
 
-        <button onClick={handleSave} className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white">
-          Save
-        </button>
-        {saved && <span className="ml-3 text-sm text-emerald-600">Saved.</span>}
-      </div>
+        <div className="flex items-center gap-3 pt-2">
+          <PrimaryButton onClick={handleSave}>Save</PrimaryButton>
+          {saved && <span className="text-sm font-medium text-emerald-600">Saved.</span>}
+        </div>
+      </Card>
+
+      <IntegrationsSection workspaceId={workspaceId} />
+      <SSOConfigSection />
     </div>
+  );
+}
+
+function IntegrationsSection({ workspaceId }: { workspaceId: string }) {
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [provider, setProvider] = useState<(typeof KNOWN_PROVIDERS)[number]>("linear");
+  const [apiKey, setApiKey] = useState("");
+
+  useEffect(() => {
+    api.resolvedFeatureFlags(["open_integration_framework"]).then((r) => setEnabled(r.flags.open_integration_framework ?? false));
+  }, []);
+
+  async function refresh() {
+    setIntegrations(await api.listIntegrations(workspaceId));
+  }
+
+  useEffect(() => {
+    // Deferred to a microtask — see dashboard/page.tsx for why.
+    queueMicrotask(() => {
+      if (enabled) refresh();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
+
+  async function handleConnect() {
+    await api.connectIntegration(provider, apiKey ? { api_key: apiKey } : {});
+    setApiKey("");
+    await refresh();
+  }
+
+  async function handleDisconnect(id: string) {
+    await api.disconnectIntegration(id);
+    await refresh();
+  }
+
+  if (enabled === false) return null;
+
+  return (
+    <Card className="mt-8 space-y-5">
+      <div>
+        <h2 className="font-semibold text-slate-900">Integrations</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Scaffolding for integrations beyond GitHub/Slack — connecting one stores its config for a future job to act on; it doesn&apos;t
+          perform a live OAuth handshake.
+        </p>
+      </div>
+
+      {enabled === null ? (
+        <p className="text-sm text-slate-400">Loading…</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500">Provider</label>
+              <select
+                className="mt-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                value={provider}
+                onChange={(e) => setProvider(e.target.value as (typeof KNOWN_PROVIDERS)[number])}
+              >
+                {KNOWN_PROVIDERS.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500">API key (optional)</label>
+              <Input className="mt-1.5" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="••••••" />
+            </div>
+            <PrimaryButton onClick={handleConnect}>Connect</PrimaryButton>
+          </div>
+
+          <div className="space-y-2">
+            {integrations.length === 0 && <p className="text-sm text-slate-400">No integrations connected yet.</p>}
+            {integrations.map((i) => (
+              <div key={i.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-slate-700">{i.provider}</span>
+                  <Badge tone={i.status === "connected" ? "success" : "default"}>{i.status}</Badge>
+                </div>
+                {i.status === "connected" && (
+                  <SecondaryButton className="px-3 py-1 text-xs" onClick={() => handleDisconnect(i.id)}>Disconnect</SecondaryButton>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function SSOConfigSection() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [config, setConfig] = useState<WorkspaceSSOConfig | null>(null);
+  const [issuer, setIssuer] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [scimToken, setScimToken] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    api.resolvedFeatureFlags(["workspace_sso"]).then((r) => setEnabled(r.flags.workspace_sso ?? false));
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) return;
+    api.getSSOConfig().then((c) => {
+      setConfig(c);
+      if (c) {
+        setIssuer(c.issuer);
+        setClientId(c.client_id);
+      }
+    });
+  }, [enabled]);
+
+  async function handleSave() {
+    const updated = await api.upsertSSOConfig({ issuer, client_id: clientId, client_secret: clientSecret, enabled: config?.enabled ?? true });
+    setConfig(updated);
+    setClientSecret("");
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function handleRotateToken() {
+    const { scim_token } = await api.rotateSCIMToken();
+    setScimToken(scim_token);
+    const refreshed = await api.getSSOConfig();
+    setConfig(refreshed);
+  }
+
+  if (enabled === false) return null;
+
+  return (
+    <Card className="mt-8 space-y-5">
+      <div>
+        <h2 className="font-semibold text-slate-900">SSO &amp; SCIM</h2>
+        <p className="mt-1 text-xs text-slate-500">Per-workspace OIDC configuration. Secrets are never returned once stored — only rotatable.</p>
+      </div>
+
+      {enabled === null ? (
+        <p className="text-sm text-slate-400">Loading…</p>
+      ) : (
+        <>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500">Issuer URL</label>
+              <Input className="mt-1.5 w-full" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="https://your-idp.example.com" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500">Client ID</label>
+              <Input className="mt-1.5 w-full" value={clientId} onChange={(e) => setClientId(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500">Client secret {config && "(leave blank to keep current)"}</label>
+              <Input type="password" className="mt-1.5 w-full" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-3">
+              <PrimaryButton onClick={handleSave} disabled={!issuer.trim() || !clientId.trim() || (!config && !clientSecret.trim())}>Save</PrimaryButton>
+              {saved && <span className="text-sm font-medium text-emerald-600">Saved.</span>}
+            </div>
+          </div>
+
+          {config && (
+            <div className="border-t border-slate-200 pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-700">SCIM provisioning token</p>
+                  <p className="text-xs text-slate-400">{config.has_scim_token ? "A token has been generated." : "No token generated yet."}</p>
+                </div>
+                <SecondaryButton onClick={handleRotateToken}>{config.has_scim_token ? "Rotate token" : "Generate token"}</SecondaryButton>
+              </div>
+              {scimToken && (
+                <p className="mt-2 rounded-lg bg-amber-50 p-3 font-mono text-xs text-amber-900">
+                  {scimToken} — shown once, copy it now.
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </Card>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs text-gray-500">{label}</label>
-      <div className="mt-1">{children}</div>
+      <label className="block text-xs font-semibold text-slate-500">{label}</label>
+      <div className="mt-1.5">{children}</div>
     </div>
   );
 }

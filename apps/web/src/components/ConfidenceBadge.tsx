@@ -1,7 +1,7 @@
 export function ConfidenceBadge({ score }: { score: number | null }) {
   if (score === null) {
     return (
-      <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
         No evidence yet
       </span>
     );
@@ -15,7 +15,7 @@ export function ConfidenceBadge({ score }: { score: number | null }) {
         : "bg-rose-100 text-rose-800";
 
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${tone}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${tone}`}>
       {score}/100 confidence
     </span>
   );

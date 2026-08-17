@@ -110,9 +110,9 @@ async def create_scim_user(
 
 @router.get("/Users/{user_id}")
 async def get_scim_user(
-    user_id: str, config: WorkspaceSSOConfig = Depends(_authenticate_scim), db: AsyncSession = Depends(get_db)
+    user_id: UUID, config: WorkspaceSSOConfig = Depends(_authenticate_scim), db: AsyncSession = Depends(get_db)
 ) -> dict:
-    user = await db.get(User, UUID(user_id))
+    user = await db.get(User, user_id)
     if user is None or user.workspace_id != config.workspace_id:
         raise HTTPException(status_code=404, detail={"schemas": [SCIM_ERROR_SCHEMA], "detail": "User not found"})
     return _to_scim_user(user)
@@ -120,14 +120,14 @@ async def get_scim_user(
 
 @router.patch("/Users/{user_id}")
 async def patch_scim_user(
-    user_id: str, request: Request, config: WorkspaceSSOConfig = Depends(_authenticate_scim), db: AsyncSession = Depends(get_db)
+    user_id: UUID, request: Request, config: WorkspaceSSOConfig = Depends(_authenticate_scim), db: AsyncSession = Depends(get_db)
 ) -> dict:
     """Handles the one PATCH every IdP actually sends for deprovisioning:
     `{"Operations": [{"op": "replace", "path": "active", "value": false}]}`
     — deactivating here removes workspace membership (real revocation via
     token_version, same as the admin-facing removal endpoint), not a soft flag
     nothing else checks."""
-    user = await db.get(User, UUID(user_id))
+    user = await db.get(User, user_id)
     if user is None or user.workspace_id != config.workspace_id:
         raise HTTPException(status_code=404, detail={"schemas": [SCIM_ERROR_SCHEMA], "detail": "User not found"})
 
@@ -147,9 +147,9 @@ async def patch_scim_user(
 
 @router.delete("/Users/{user_id}", status_code=204)
 async def delete_scim_user(
-    user_id: str, config: WorkspaceSSOConfig = Depends(_authenticate_scim), db: AsyncSession = Depends(get_db)
+    user_id: UUID, config: WorkspaceSSOConfig = Depends(_authenticate_scim), db: AsyncSession = Depends(get_db)
 ) -> None:
-    user = await db.get(User, UUID(user_id))
+    user = await db.get(User, user_id)
     if user is None or user.workspace_id != config.workspace_id:
         raise HTTPException(status_code=404, detail={"schemas": [SCIM_ERROR_SCHEMA], "detail": "User not found"})
     user.workspace_id = None

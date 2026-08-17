@@ -10,14 +10,28 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import ensure_workspace_access, get_internal_user, require_feature_flag
+from app.auth.dependencies import ensure_workspace_access, get_internal_user, get_repo_for_user, require_feature_flag
 from app.db.models import Commit, EvidenceItem, PullRequest, Repo, User
 from app.db.session import get_db
-from app.schemas import PRAutoRouteResult, ReviewerSuggestion
+from app.schemas import PRAutoRouteResult, PullRequestOut, ReviewerSuggestion
 
 router = APIRouter(prefix="/pr-autoroute", tags=["pr-autoroute"])
 
 LOOKBACK_REVIEWERS_PER_FILE = 3
+
+
+@router.get(
+    "/pull-requests",
+    response_model=list[PullRequestOut],
+    dependencies=[Depends(require_feature_flag("pr_autoroute"))],
+)
+async def list_recent_pull_requests(
+    repo: Repo = Depends(get_repo_for_user), db: AsyncSession = Depends(get_db)
+) -> list[PullRequest]:
+    """Real, recent PRs to pick from before asking for reviewer suggestions —
+    without this, the feature has no way to know which PR you mean."""
+    result = await db.execute(select(PullRequest).where(PullRequest.repo_id == repo.id).order_by(PullRequest.opened_at.desc()).limit(50))
+    return list(result.scalars().all())
 
 
 @router.get(
@@ -26,9 +40,9 @@ LOOKBACK_REVIEWERS_PER_FILE = 3
     dependencies=[Depends(require_feature_flag("pr_autoroute"))],
 )
 async def suggest_reviewers(
-    pull_request_id: str, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
+    pull_request_id: UUID, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
 ) -> PRAutoRouteResult:
-    pr = await db.get(PullRequest, UUID(pull_request_id))
+    pr = await db.get(PullRequest, pull_request_id)
     if pr is None:
         raise HTTPException(status_code=404, detail="Pull request not found")
     repo = await db.get(Repo, pr.repo_id)

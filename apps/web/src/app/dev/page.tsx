@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type Ticket } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
 import { TicketCard } from "@/components/TicketCard";
+import { Input, PageHeader, EmptyState, LoadingState } from "@/components/ui";
 
 /**
  * Developer view — same TicketOut data as the PM dashboard, filtered to
@@ -36,31 +37,25 @@ export default function DeveloperViewPage() {
   );
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-gray-900">Your tickets</h1>
-        <div className="flex items-center gap-3">
-          <input
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-            placeholder="Your GitHub username"
-            value={githubLogin}
-            onChange={(e) => setGithubLogin(e.target.value)}
-          />
-          <RepoPicker selectedRepoId={repoId} onChange={setRepoId} />
-        </div>
-      </div>
+    <div className="mx-auto max-w-5xl px-6 py-10">
+      <PageHeader
+        title="Your tickets"
+        subtitle="What your recent commits show for the tickets assigned to you — including anything worth double-checking before standup."
+        actions={
+          <div className="flex items-center gap-3">
+            <Input placeholder="Your GitHub username" value={githubLogin} onChange={(e) => setGithubLogin(e.target.value)} />
+            <RepoPicker selectedRepoId={repoId} onChange={setRepoId} />
+          </div>
+        }
+      />
 
-      <p className="mt-2 text-sm text-gray-500">
-        Here&apos;s what your recent commits show for the tickets assigned to you — including
-        anything worth double-checking before standup.
-      </p>
-
-      <div className="mt-6 space-y-4">
-        {loading && <p className="text-sm text-gray-500">Loading…</p>}
+      <div className="mt-8 space-y-4">
+        {loading && <LoadingState />}
         {!loading && myTickets.length === 0 && repoId && (
-          <p className="text-sm text-gray-500">
-            {githubLogin ? "No tickets assigned to you in this repo yet." : "Enter your GitHub username to filter to your tickets."}
-          </p>
+          <EmptyState
+            title={githubLogin ? "No tickets assigned to you in this repo yet" : "Enter your GitHub username"}
+            body={githubLogin ? undefined : "So we can filter down to your tickets."}
+          />
         )}
         {myTickets.map((ticket) => (
           <TicketCard key={ticket.id} ticket={ticket} />

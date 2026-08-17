@@ -21,13 +21,14 @@ import uuid
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import record_audit, record_audit_for_user
 from app.auth.dependencies import ensure_workspace_access, get_current_user, require_role
+from app.auth.rate_limit import client_ip, enforce_rate_limit
 from app.auth.security import (
     TokenError,
     create_action_token,
@@ -171,7 +172,13 @@ async def github_callback(code: str, db: AsyncSession = Depends(get_db)) -> Redi
 
 
 @router.post("/login", response_model=TokenPair)
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenPair:
+async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)) -> TokenPair:
+    # Two windows: by IP (catches one attacker spraying many emails) and by
+    # email (catches distributed brute force against one account) — either
+    # one tripping is enough to block this attempt.
+    await enforce_rate_limit(key=f"ratelimit:login:ip:{client_ip(request)}", max_attempts=20, window_seconds=300)
+    await enforce_rate_limit(key=f"ratelimit:login:email:{payload.email.lower()}", max_attempts=10, window_seconds=900)
+
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if user is None or user.password_hash is None or not verify_password(payload.password, user.password_hash):
@@ -345,7 +352,13 @@ async def accept_invite(payload: SetPasswordRequest, db: AsyncSession = Depends(
 
 
 @router.post("/request-password-reset")
-async def request_password_reset(payload: RequestPasswordResetRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def request_password_reset(payload: RequestPasswordResetRequest, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+    # Tighter than login — each attempt sends a real email if the account
+    # exists, so this doubles as spam/cost control, not just brute-force
+    # protection.
+    await enforce_rate_limit(key=f"ratelimit:pwreset:ip:{client_ip(request)}", max_attempts=5, window_seconds=3600)
+    await enforce_rate_limit(key=f"ratelimit:pwreset:email:{payload.email.lower()}", max_attempts=3, window_seconds=3600)
+
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if user is not None:

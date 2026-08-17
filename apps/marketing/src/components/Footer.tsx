@@ -29,23 +29,27 @@ const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-slate-200 bg-slate-50">
-      <div className="mx-auto max-w-6xl px-6 py-12">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
-          <div className="col-span-2 sm:col-span-1">
-            <Link href="/" className="flex items-center gap-2 text-base font-semibold text-slate-900">
-              <span className="inline-block h-5 w-5 rounded-md bg-indigo-600" aria-hidden />
+    <footer className="border-t border-slate-200 bg-white text-slate-600">
+      <div className="mx-auto max-w-7xl px-6 py-16">
+        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4 lg:grid-cols-5">
+          <div className="col-span-2 lg:col-span-2">
+            <Link href="/" className="flex items-center gap-2 text-xl font-bold text-slate-900 tracking-tight">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-neon)] text-slate-900" aria-hidden>
+                 <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+              </span>
               VeriSprint
             </Link>
-            <p className="mt-3 text-sm text-slate-500">What actually shipped — backed by commits, not status updates.</p>
+            <p className="mt-4 max-w-xs text-sm text-slate-400 leading-relaxed">
+              What actually shipped — backed by commits, not status updates.
+            </p>
           </div>
           {COLUMNS.map((col) => (
             <div key={col.title}>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">{col.title}</h3>
-              <ul className="mt-3 space-y-2 text-sm">
+              <h3 className="text-xs font-semibold uppercase tracking-wider font-monor text-slate-500">{col.title}</h3>
+              <ul className="mt-4 space-y-3 text-sm">
                 {col.links.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href} className="text-slate-600 hover:text-slate-900">
+                    <Link href={link.href} className="text-slate-400 transition-colors hover:text-slate-900">
                       {link.label}
                     </Link>
                   </li>
@@ -54,9 +58,9 @@ export function Footer() {
             </div>
           ))}
         </div>
-        <div className="mt-10 flex flex-col items-start justify-between gap-4 border-t border-slate-200 pt-6 text-xs text-slate-400 sm:flex-row sm:items-center">
+        <div className="mt-16 flex flex-col items-start justify-between gap-4 border-t border-slate-200 pt-8 text-sm text-slate-500 sm:flex-row sm:items-center">
           <p>© {new Date().getFullYear()} VeriSprint. All rights reserved.</p>
-          <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-slate-600">
+          <a href={`mailto:${CONTACT_EMAIL}`} className="transition-colors hover:text-slate-900">
             {CONTACT_EMAIL}
           </a>
         </div>

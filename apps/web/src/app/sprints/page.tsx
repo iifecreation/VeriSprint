@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Burndown, type Sprint } from "@/lib/api";
+import { api, type Burndown, type DeliveryForecast, type Sprint } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
+import { Card, EmptyState, Input, LoadingState, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -19,6 +20,9 @@ export default function SprintsPage() {
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
   const [burndown, setBurndown] = useState<Burndown | null>(null);
+  const [forecast, setForecast] = useState<DeliveryForecast | null>(null);
+  const [forecastStatus, setForecastStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [forecastEnabled, setForecastEnabled] = useState<boolean | null>(null);
 
   const [name, setName] = useState("");
   const [start, setStart] = useState(daysAgoISO(14));
@@ -41,8 +45,27 @@ export default function SprintsPage() {
   }, [repoId]);
 
   useEffect(() => {
-    if (selectedSprintId) api.getBurndown(selectedSprintId).then(setBurndown);
+    // Deferred to a microtask — see dashboard/page.tsx for why.
+    queueMicrotask(() => {
+      if (selectedSprintId) api.getBurndown(selectedSprintId).then(setBurndown);
+      setForecast(null);
+    });
   }, [selectedSprintId]);
+
+  useEffect(() => {
+    api.resolvedFeatureFlags(["delivery_forecast"]).then((r) => setForecastEnabled(r.flags.delivery_forecast ?? false));
+  }, []);
+
+  async function handleForecast() {
+    if (!selectedSprintId) return;
+    setForecastStatus("loading");
+    try {
+      setForecast(await api.getDeliveryForecast(selectedSprintId));
+      setForecastStatus("idle");
+    } catch {
+      setForecastStatus("error");
+    }
+  }
 
   async function handleCreate() {
     if (!repoId || !name.trim()) return;
@@ -62,38 +85,35 @@ export default function SprintsPage() {
   const maxWeighted = burndown ? Math.max(1, ...burndown.points.map((p) => p.planned_tickets)) : 1;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Sprints &amp; Burndown</h1>
-        <RepoPicker selectedRepoId={repoId} onChange={setRepoId} />
-      </div>
+    <div className="mx-auto max-w-4xl px-6 py-10">
+      <PageHeader title="Sprints & Burndown" subtitle="A burndown built from real Confidence Score history — never a self-reported percentage." actions={<RepoPicker selectedRepoId={repoId} onChange={setRepoId} />} />
 
-      <div className="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4">
+      <Card className="mt-8 flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-xs text-gray-500">Sprint name</label>
-          <input className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={name} onChange={(e) => setName(e.target.value)} placeholder="Sprint 12" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500">Start</label>
-          <input type="date" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={start} onChange={(e) => setStart(e.target.value)} />
+          <label className="block text-xs font-semibold text-slate-500">Sprint name</label>
+          <Input className="mt-1.5" value={name} onChange={(e) => setName(e.target.value)} placeholder="Sprint 12" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500">End</label>
-          <input type="date" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={end} onChange={(e) => setEnd(e.target.value)} />
+          <label className="block text-xs font-semibold text-slate-500">Start</label>
+          <Input type="date" className="mt-1.5" value={start} onChange={(e) => setStart(e.target.value)} />
         </div>
-        <div className="flex-1 min-w-[200px]">
-          <label className="block text-xs text-gray-500">Planned ticket keys (comma-separated)</label>
-          <input className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={ticketKeys} onChange={(e) => setTicketKeys(e.target.value)} placeholder="ENG-1, ENG-2" />
+        <div>
+          <label className="block text-xs font-semibold text-slate-500">End</label>
+          <Input type="date" className="mt-1.5" value={end} onChange={(e) => setEnd(e.target.value)} />
         </div>
-        <button onClick={handleCreate} disabled={!repoId || !name.trim()} className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+        <div className="min-w-[200px] flex-1">
+          <label className="block text-xs font-semibold text-slate-500">Planned ticket keys (comma-separated)</label>
+          <Input className="mt-1.5 w-full" value={ticketKeys} onChange={(e) => setTicketKeys(e.target.value)} placeholder="ENG-1, ENG-2" />
+        </div>
+        <PrimaryButton onClick={handleCreate} disabled={!repoId || !name.trim()}>
           Create sprint
-        </button>
-      </div>
+        </PrimaryButton>
+      </Card>
 
       {sprints.length > 0 && (
         <div className="mt-6">
           <select
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm"
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900"
             value={selectedSprintId ?? ""}
             onChange={(e) => setSelectedSprintId(e.target.value)}
           >
@@ -107,30 +127,69 @@ export default function SprintsPage() {
       )}
 
       {burndown && (
-        <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
-          <h2 className="text-sm font-medium text-gray-900">
+        <Card className="mt-6">
+          <h2 className="text-sm font-semibold text-slate-900">
             {burndown.sprint.name} — confidence-weighted completion (real evidence, not self-reported %)
           </h2>
-          <div className="mt-4 flex items-end gap-1" style={{ height: 160 }}>
+          <div className="mt-6 flex items-end gap-1.5" style={{ height: 160 }}>
             {burndown.points.map((p) => (
-              <div key={p.day} className="flex flex-1 flex-col items-center justify-end gap-1" title={`${new Date(p.day).toLocaleDateString()}: ${p.confidence_weighted_complete}/${p.planned_tickets}`}>
+              <div
+                key={p.day}
+                className="flex flex-1 flex-col items-center justify-end gap-1"
+                title={`${new Date(p.day).toLocaleDateString()}: ${p.confidence_weighted_complete}/${p.planned_tickets}`}
+              >
                 <div
-                  className="w-full rounded-t bg-emerald-500"
+                  className="w-full rounded-t-md bg-[var(--accent-neon-hover)]"
                   style={{ height: `${maxWeighted ? (p.confidence_weighted_complete / maxWeighted) * 140 : 0}px` }}
                 />
                 <div
-                  className="w-full rounded-t bg-gray-200"
+                  className="w-full rounded-t-md bg-slate-200"
                   style={{ height: `${maxWeighted ? ((p.planned_tickets - p.confidence_weighted_complete) / maxWeighted) * 140 : 0}px` }}
                 />
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-gray-500">
-            Green = confidence-weighted complete (sum of score/100 across planned tickets), grey = remaining. {burndown.points.length} day(s) of real data — no synthetic points for days that haven&apos;t happened yet.
+          <p className="mt-4 text-xs text-slate-500">
+            Green = confidence-weighted complete (sum of score/100 across planned tickets), grey = remaining. {burndown.points.length} day(s) of real
+            data — no synthetic points for days that haven&apos;t happened yet.
           </p>
+        </Card>
+      )}
+
+      {selectedSprintId && forecastEnabled && (
+        <Card className="mt-6">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-slate-900">Delivery forecast</h2>
+            <SecondaryButton onClick={handleForecast} disabled={forecastStatus === "loading"}>
+              {forecastStatus === "loading" ? "Projecting…" : forecast ? "Refresh" : "Project completion"}
+            </SecondaryButton>
+          </div>
+          {forecastStatus === "error" && <p className="mt-2 text-sm text-rose-600">Couldn&apos;t reach the API to project this sprint.</p>}
+          {forecastStatus === "loading" && <div className="mt-3"><LoadingState /></div>}
+          {forecast && (
+            <div className="mt-3 space-y-1 text-sm text-slate-700">
+              <p>
+                {forecast.current_confidence_weighted_complete.toFixed(1)} / {forecast.planned_tickets} confidence-weighted complete so far
+                {forecast.velocity_per_day !== null && <> · {forecast.velocity_per_day}/day velocity</>}
+              </p>
+              {forecast.projected_completion_date ? (
+                <p className="font-semibold text-slate-900">
+                  Projected completion: {new Date(forecast.projected_completion_date).toLocaleDateString()}
+                </p>
+              ) : (
+                forecast.projection_note && <p className="text-slate-500">{forecast.projection_note}</p>
+              )}
+              <p className="mt-2 text-xs text-slate-400">{forecast.method}</p>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {sprints.length === 0 && repoId && (
+        <div className="mt-6">
+          <EmptyState title="No sprints yet" body="Create one above." />
         </div>
       )}
-      {sprints.length === 0 && repoId && <p className="mt-6 text-sm text-gray-500">No sprints yet — create one above.</p>}
     </div>
   );
 }

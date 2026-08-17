@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { api, type CodeHealthSignals, type DORAMetrics, type RiskRadar, type TeamGoal } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
-import { decodeAccessTokenClaims } from "@/lib/auth";
+import { useAccessTokenClaims } from "@/lib/auth";
+import { Card, Input, PageHeader } from "@/components/ui";
 
 const FLAG_KEYS = ["dora_panel", "code_health_signals", "risk_radar", "team_goals"];
 
@@ -19,8 +20,8 @@ function daysAgoISO(days: number) {
 /**
  * Insights (Phase 2/3 competitor-parity): a curated view of the newer
  * feature set — DORA metrics, code health signals, risk radar, and team
- * goals. Each panel is gated by its own workspace feature flag (Super-Admin
- * Dashboard → Flags); off by default, so most workspaces will see the
+ * goals. Each panel is gated by its own workspace feature flag (Operator
+ * Console → Flags); off by default, so most workspaces will see the
  * "not enabled" state here until an admin turns one on.
  */
 export default function InsightsPage() {
@@ -28,31 +29,29 @@ export default function InsightsPage() {
   const [start, setStart] = useState(daysAgoISO(30));
   const [end, setEnd] = useState(todayISO());
   const [flags, setFlags] = useState<Record<string, boolean> | null>(null);
-  const workspaceId = decodeAccessTokenClaims()?.workspace_id ?? null;
+  const workspaceId = useAccessTokenClaims()?.workspace_id ?? null;
 
   useEffect(() => {
     api.resolvedFeatureFlags(FLAG_KEYS).then((r) => setFlags(r.flags));
   }, []);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Insights</h1>
-          <p className="mt-1 text-sm text-gray-500">DORA metrics, code health, risk radar, and team goals.</p>
-        </div>
-        <RepoPicker selectedRepoId={repoId} onChange={setRepoId} />
-      </div>
+    <div className="mx-auto max-w-5xl px-6 py-10">
+      <PageHeader
+        title="Insights"
+        subtitle="DORA metrics, code health, risk radar, and team goals — the competitor-parity feature set."
+        actions={<RepoPicker selectedRepoId={repoId} onChange={setRepoId} />}
+      />
 
-      <div className="mt-4 flex gap-3">
-        <input type="date" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={start} onChange={(e) => setStart(e.target.value)} />
-        <input type="date" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={end} onChange={(e) => setEnd(e.target.value)} />
+      <div className="mt-6 flex gap-3">
+        <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+        <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
       </div>
 
       {!flags ? (
-        <p className="mt-6 text-sm text-gray-400">Loading…</p>
+        <p className="mt-8 text-sm text-slate-400">Loading…</p>
       ) : (
-        <div className="mt-6 grid gap-6 sm:grid-cols-2">
+        <div className="mt-8 grid gap-6 sm:grid-cols-2">
           <Panel title="DORA Metrics" enabled={flags.dora_panel}>
             {repoId && flags.dora_panel && <DoraPanel repoId={repoId} start={start} end={end} />}
           </Panel>
@@ -73,22 +72,22 @@ export default function InsightsPage() {
 
 function Panel({ title, enabled, children }: { title: string; enabled: boolean; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <h2 className="font-semibold text-gray-900">{title}</h2>
+    <Card>
+      <h2 className="font-semibold text-slate-900">{title}</h2>
       {enabled ? (
         children
       ) : (
-        <p className="mt-2 text-xs text-gray-400">Not enabled for your workspace — a Super Admin can turn this on from the Flags panel.</p>
+        <p className="mt-2 text-xs text-slate-400">Not enabled for your workspace — a Super Admin can turn this on from the Operator Console.</p>
       )}
-    </div>
+    </Card>
   );
 }
 
 function Stat({ label, value }: { label: string; value: string | number | null }) {
   return (
     <div className="mt-2 flex justify-between text-sm">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-medium text-gray-900">{value ?? "—"}</span>
+      <span className="text-slate-500">{label}</span>
+      <span className="font-semibold text-slate-900">{value ?? "—"}</span>
     </div>
   );
 }
@@ -98,13 +97,13 @@ function DoraPanel({ repoId, start, end }: { repoId: string; start: string; end:
   useEffect(() => {
     api.getDora(repoId, `${start}T00:00:00Z`, `${end}T23:59:59Z`).then(setData).catch(() => setData(null));
   }, [repoId, start, end]);
-  if (!data) return <p className="mt-2 text-xs text-gray-400">Loading…</p>;
+  if (!data) return <p className="mt-2 text-xs text-slate-400">Loading…</p>;
   return (
     <div>
       <Stat label="Merged PRs" value={data.deployed_pr_count} />
       <Stat label="Deploys / day" value={data.deployment_frequency_per_day} />
       <Stat label="Lead time (hrs)" value={data.lead_time_for_changes_hours} />
-      <p className="mt-3 text-xs text-gray-400">{data.unavailable_metrics_note}</p>
+      <p className="mt-3 text-xs text-slate-400">{data.unavailable_metrics_note}</p>
     </div>
   );
 }
@@ -114,7 +113,7 @@ function CodeHealthPanel({ repoId, start, end }: { repoId: string; start: string
   useEffect(() => {
     api.getCodeHealth(repoId, `${start}T00:00:00Z`, `${end}T23:59:59Z`).then(setData).catch(() => setData(null));
   }, [repoId, start, end]);
-  if (!data) return <p className="mt-2 text-xs text-gray-400">Loading…</p>;
+  if (!data) return <p className="mt-2 text-xs text-slate-400">Loading…</p>;
   return (
     <div>
       <Stat label="Health score" value={data.health_score !== null ? `${data.health_score}%` : "Not enough evidence yet"} />
@@ -130,7 +129,7 @@ function RiskPanel({ repoId }: { repoId: string }) {
   useEffect(() => {
     api.getRiskRadar(repoId).then(setData).catch(() => setData(null));
   }, [repoId]);
-  if (!data) return <p className="mt-2 text-xs text-gray-400">Loading…</p>;
+  if (!data) return <p className="mt-2 text-xs text-slate-400">Loading…</p>;
   return (
     <div>
       <Stat label="Risk score" value={`${data.risk_score}%`} />
@@ -150,18 +149,18 @@ function GoalsPanel({ workspaceId }: { workspaceId: string }) {
   }, [workspaceId]);
   return (
     <div>
-      {goals.length === 0 && <p className="mt-2 text-xs text-gray-400">No goals set yet.</p>}
+      {goals.length === 0 && <p className="mt-2 text-xs text-slate-400">No goals set yet.</p>}
       {goals.map((g) => (
-        <div key={g.id} className="mt-2">
+        <div key={g.id} className="mt-3">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-700">{g.name}</span>
-            <span className="text-gray-500">
+            <span className="text-slate-700">{g.name}</span>
+            <span className="text-slate-500">
               {g.current_value ?? "—"} / {g.target_value}
             </span>
           </div>
-          <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100">
+          <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100">
             <div
-              className="h-1.5 rounded-full bg-indigo-500"
+              className="h-1.5 rounded-full bg-[var(--accent-neon-hover)]"
               style={{ width: `${Math.min(g.progress_pct ?? 0, 100)}%` }}
             />
           </div>

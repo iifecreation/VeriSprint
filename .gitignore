@@ -9,6 +9,8 @@ apps/web/.next/
 apps/web/out/
 apps/marketing/.next/
 apps/marketing/out/
+apps/admin/.next/
+apps/admin/out/
 npm-debug.log*
 
 # Python

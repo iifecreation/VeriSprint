@@ -73,7 +73,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.web_base_url],
+    # Three separate frontend deploys (product app, operator console,
+    # marketing site) each need to call this API from their own origin.
+    allow_origins=[settings.web_base_url, settings.admin_base_url, settings.marketing_base_url],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

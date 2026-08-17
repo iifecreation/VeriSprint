@@ -36,7 +36,7 @@ async def list_reports(
     stmt = select(ReportDocument).where(ReportDocument.repo_id == repo.id).order_by(ReportDocument.created_at.desc())
     if report_type is not None:
         stmt = stmt.where(ReportDocument.report_type == report_type)
-    result = await db.execute(stmt)
+    result = await db.execute(stmt.limit(200))
     return list(result.scalars().all())
 
 
