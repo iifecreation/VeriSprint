@@ -30,7 +30,10 @@ async def list_logical_work_units(
         return []
 
     commits_result = await db.execute(
-        select(Commit).where(Commit.repo_id.in_(repo_by_id.keys()), Commit.linked_ticket_key.is_not(None))
+        select(Commit)
+        .where(Commit.repo_id.in_(repo_by_id.keys()), Commit.linked_ticket_key.is_not(None))
+        .order_by(Commit.committed_at.desc())
+        .limit(5000)
     )
     commits = list(commits_result.scalars().all())
 

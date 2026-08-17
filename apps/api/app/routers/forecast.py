@@ -23,9 +23,9 @@ router = APIRouter(prefix="/forecast", tags=["forecast"])
 
 @router.get("/{sprint_id}", response_model=DeliveryForecast, dependencies=[Depends(require_feature_flag("delivery_forecast"))])
 async def get_delivery_forecast(
-    sprint_id: str, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
+    sprint_id: UUID, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
 ) -> DeliveryForecast:
-    sprint = await db.get(Sprint, UUID(sprint_id))
+    sprint = await db.get(Sprint, sprint_id)
     if sprint is None:
         raise HTTPException(status_code=404, detail="Sprint not found")
     repo = await db.get(Repo, sprint.repo_id)

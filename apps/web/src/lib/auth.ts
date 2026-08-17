@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { API_BASE_URL } from "./config";
 
 /**
@@ -51,6 +52,24 @@ export function decodeAccessTokenClaims(): { role: string; workspace_id: string 
   } catch {
     return null;
   }
+}
+
+/** Client-only hook wrapper around `decodeAccessTokenClaims`. Calling that
+ * function directly in a render body reads `localStorage`, which returns
+ * `null` during SSR but a real value on the client's first hydration pass —
+ * a guaranteed hydration mismatch for any page that branches on it. This
+ * always renders `null` on the first pass (matching the server) and fills
+ * in the real claims from an effect afterward, same as TopNav's own
+ * login-state check. */
+export function useAccessTokenClaims(): ReturnType<typeof decodeAccessTokenClaims> {
+  const [claims, setClaims] = useState<ReturnType<typeof decodeAccessTokenClaims>>(null);
+  useEffect(() => {
+    // Deferred to a microtask — see dashboard/page.tsx for why.
+    queueMicrotask(() => {
+      setClaims(decodeAccessTokenClaims());
+    });
+  }, []);
+  return claims;
 }
 
 let refreshInFlight: Promise<string | null> | null = null;

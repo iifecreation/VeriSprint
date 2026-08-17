@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api, type EvidenceItem } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
+import { Input, PageHeader, PrimaryButton } from "@/components/ui";
 
 type Exchange = { question: string; answer: string; citations: EvidenceItem[] };
 
@@ -30,23 +31,21 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Ask Your Codebase</h1>
-          <p className="mt-1 text-sm text-gray-500">Plain-English questions over real commit history, with citations.</p>
-        </div>
-        <RepoPicker selectedRepoId={repoId} onChange={setRepoId} />
-      </div>
+    <div className="mx-auto max-w-3xl px-6 py-10">
+      <PageHeader
+        title="Ask Your Codebase"
+        subtitle="Plain-English questions over real commit history, with citations."
+        actions={<RepoPicker selectedRepoId={repoId} onChange={setRepoId} />}
+      />
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-8 space-y-4">
         {exchanges.map((ex, i) => (
           <div key={i} className="space-y-2">
-            <div className="ml-auto max-w-md rounded-lg bg-gray-900 px-3 py-2 text-sm text-white">{ex.question}</div>
-            <div className="max-w-lg rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800">
+            <div className="ml-auto max-w-md rounded-2xl bg-slate-900 px-4 py-2.5 text-sm text-white">{ex.question}</div>
+            <div className="glass-card max-w-lg rounded-2xl px-4 py-3 text-sm text-slate-800">
               <p className="whitespace-pre-wrap">{ex.answer}</p>
               {ex.citations.length > 0 && (
-                <ul className="mt-2 space-y-1 border-t border-gray-100 pt-2 text-xs text-gray-500">
+                <ul className="mt-3 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-500">
                   {ex.citations.map((c) => (
                     <li key={c.id}>
                       [{c.id.slice(0, 8)}] {c.description}
@@ -58,7 +57,7 @@ export default function ChatPage() {
           </div>
         ))}
         {exchanges.length === 0 && (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-slate-500">
             Try: &ldquo;What shipped this week?&rdquo; or &ldquo;Did we finish the login flow?&rdquo;
           </p>
         )}
@@ -67,21 +66,17 @@ export default function ChatPage() {
       {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
 
       <div className="mt-6 flex gap-2">
-        <input
-          className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+        <Input
+          className="flex-1"
           placeholder="Ask a question about this repo..."
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAsk()}
           disabled={!repoId}
         />
-        <button
-          onClick={handleAsk}
-          disabled={!repoId || !question.trim() || loading}
-          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <PrimaryButton onClick={handleAsk} disabled={!repoId || !question.trim() || loading}>
           {loading ? "Asking…" : "Ask"}
-        </button>
+        </PrimaryButton>
       </div>
     </div>
   );

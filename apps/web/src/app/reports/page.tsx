@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { api, type ReportDocument, type Sprint } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
+import { Badge, Card, EmptyState, Input, PageHeader, SecondaryButton } from "@/components/ui";
 
-const STATUS_TONE: Record<ReportDocument["status"], string> = {
-  generating: "bg-amber-100 text-amber-800",
-  ready: "bg-emerald-100 text-emerald-800",
-  failed: "bg-rose-100 text-rose-800",
+const STATUS_TONE: Record<ReportDocument["status"], "warning" | "success" | "danger"> = {
+  generating: "warning",
+  ready: "success",
+  failed: "danger",
 };
 
 function todayISO() {
@@ -57,76 +58,57 @@ export default function ReportsPage() {
   const isoEnd = `${periodEnd}T23:59:59Z`;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Reports</h1>
-        <RepoPicker selectedRepoId={repoId} onChange={setRepoId} />
-      </div>
+    <div className="mx-auto max-w-4xl px-6 py-10">
+      <PageHeader title="Reports" subtitle="Every summary here is drafted from real commits and evidence — a failed generation says so, never a fabricated fallback." actions={<RepoPicker selectedRepoId={repoId} onChange={setRepoId} />} />
 
-      <div className="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4">
+      <Card className="mt-8 flex flex-wrap items-end gap-3">
         <div>
-          <label className="block text-xs text-gray-500">Period start</label>
-          <input type="date" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+          <label className="block text-xs font-semibold text-slate-500">Period start</label>
+          <Input type="date" className="mt-1.5" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
         </div>
         <div>
-          <label className="block text-xs text-gray-500">Period end</label>
-          <input type="date" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+          <label className="block text-xs font-semibold text-slate-500">Period end</label>
+          <Input type="date" className="mt-1.5" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
         </div>
-        <button
-          disabled={!repoId || busy}
-          onClick={() => withBusy(() => api.generateInvestorUpdate(repoId!, isoStart, isoEnd))}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-900 disabled:opacity-50"
-        >
+        <SecondaryButton disabled={!repoId || busy} onClick={() => withBusy(() => api.generateInvestorUpdate(repoId!, isoStart, isoEnd))}>
           Generate investor update
-        </button>
-        <button
-          disabled={!repoId || busy}
-          onClick={() => withBusy(() => api.generateClientPortalReport(repoId!, isoStart, isoEnd))}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-900 disabled:opacity-50"
-        >
+        </SecondaryButton>
+        <SecondaryButton disabled={!repoId || busy} onClick={() => withBusy(() => api.generateClientPortalReport(repoId!, isoStart, isoEnd))}>
           Generate client portal report
-        </button>
-        <button
-          disabled={!repoId || busy}
-          onClick={() => withBusy(() => api.generateOnboardingDoc(repoId!))}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-900 disabled:opacity-50"
-        >
+        </SecondaryButton>
+        <SecondaryButton disabled={!repoId || busy} onClick={() => withBusy(() => api.generateOnboardingDoc(repoId!))}>
           Generate onboarding doc
-        </button>
+        </SecondaryButton>
         {sprints.length > 0 && (
-          <button
-            disabled={!repoId || busy}
-            onClick={() => withBusy(() => api.generateSprintRollup(repoId!, sprints[0].id))}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-900 disabled:opacity-50"
-          >
+          <SecondaryButton disabled={!repoId || busy} onClick={() => withBusy(() => api.generateSprintRollup(repoId!, sprints[0].id))}>
             Rollup for &ldquo;{sprints[0].name}&rdquo;
-          </button>
+          </SecondaryButton>
         )}
-      </div>
+      </Card>
 
-      <div className="mt-6 space-y-3">
-        {reports.length === 0 && <p className="text-sm text-gray-500">No reports generated yet.</p>}
+      <div className="mt-8 space-y-3">
+        {reports.length === 0 && <EmptyState title="No reports generated yet" />}
         {reports.map((r) => (
-          <div key={r.id} className="rounded-lg border border-gray-200 bg-white p-4">
+          <Card key={r.id}>
             <div className="flex items-center justify-between">
               <div>
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">{r.report_type.replace(/_/g, " ")}</span>
-                <h3 className="mt-1 font-medium text-gray-900">{r.title}</h3>
+                <Badge>{r.report_type.replace(/_/g, " ")}</Badge>
+                <h3 className="mt-1.5 font-semibold text-slate-900">{r.title}</h3>
               </div>
               <div className="flex items-center gap-2">
                 {r.report_type === "client_portal" && r.share_token && (
-                  <a href={`/portal/${r.share_token}`} target="_blank" className="text-xs text-blue-600 hover:underline">
+                  <a href={`/portal/${r.share_token}`} target="_blank" className="text-xs font-medium text-[#3f6212] hover:underline">
                     Public link ↗
                   </a>
                 )}
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_TONE[r.status]}`}>{r.status}</span>
+                <Badge tone={STATUS_TONE[r.status]}>{r.status}</Badge>
               </div>
             </div>
-            {r.status === "ready" && <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{r.summary_text}</p>}
+            {r.status === "ready" && <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{r.summary_text}</p>}
             {r.status === "failed" && (
-              <p className="mt-2 text-sm text-rose-600">Generation failed — check the worker logs (likely a missing ANTHROPIC_API_KEY).</p>
+              <p className="mt-3 text-sm text-rose-600">Generation failed — check the worker logs (likely a missing ANTHROPIC_API_KEY).</p>
             )}
-          </div>
+          </Card>
         ))}
       </div>
     </div>

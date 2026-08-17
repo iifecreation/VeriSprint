@@ -589,6 +589,20 @@ class ValueStreamReport(BaseModel):
     tracked_ticket_count: int
 
 
+class PullRequestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    repo_id: uuid.UUID
+    number: int
+    title: str
+    author_github_login: str
+    state: str
+    opened_at: datetime
+    merged_at: datetime | None
+    linked_ticket_key: str | None
+
+
 class ReviewerSuggestion(BaseModel):
     file_path: str
     suggested_reviewers: list[str]

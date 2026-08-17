@@ -1,42 +1,45 @@
 import type { Metadata } from "next";
 import { PageHeader, Section } from "@/components/ui";
+import { DotPattern } from "@/components/magicui/dot-pattern";
+import { MagicCard } from "@/components/magicui/magic-card";
 
 export const metadata: Metadata = { title: "Changelog — VeriSprint" };
 
 const RELEASES = [
   {
-    version: "v3.0 — Production hardening",
+    version: "v3.0 — Growth & Enterprise Expansion",
     items: [
-      "Full multi-tenant workspace isolation: every request scoped server-side by JWT-embedded workspace_id",
-      "Five-role RBAC (Workspace Admin, Manager, Developer, Client Portal, and an internal Super Admin role)",
-      "Email/password login as a fallback to GitHub OAuth, plus team invites and password reset",
-      "Append-only audit trail covering role changes, billing changes, integration connect/disconnect, and data exports",
-      "Error monitoring and system-health metrics feeding an internal operator dashboard",
-      "Stripe-backed billing with a self-serve Free tier and workspace-level feature flag gating",
+      "Client Proof-of-Work Portal (white-labeled) and Investor Update Generator",
+      "Confidence-Weighted Burndown and ML-based Delivery Forecasts",
+      "Onboarding Doc Generator and Async Standup Replacements",
+      "Multi-repo/monorepo intelligence and Value Stream Mapping",
+      "Cost Capitalization Reports (audit-ready R&D spend)",
+      "Enterprise SSO/SAML, Compliance & Audit Trail mode, and Private/On-Prem LLM options",
+      "PR AutoRoute (policy-based reviewer assignment) and Pulse Surveys",
     ],
   },
   {
-    version: "v2.0 — Phase 2/3 feature set",
+    version: "v2.0 — Early Paid Tier",
     items: [
-      "AI Repo Chat with citations back to real evidence",
-      "Sprint rollups, investor updates, and onboarding doc generation",
-      "Confidence-weighted burndown charts",
-      "Historical accuracy scoring and the async-standup ROI calculator",
-      "Ticket Drift Detector and Orphan Commit Detector",
-      "Multi-repo intelligence for tickets that span more than one repo",
-      "Client Proof-of-Work Portal with white-labeled branding",
-      "Slack digest delivery and enterprise SSO (OIDC)",
+      "AI Repo Chat: Ask your codebase questions, answered with real citations",
+      "Sprint rollups, visual changelogs, and Slack/email digests",
+      "Ticket Drift Detector, Orphan Commit Detector, and Risk Radar",
+      "DORA Metrics Panel and Team Goals benchmarked against history",
+      "Blocker Nudge Bot and Cross-file impact maps",
+      "Durable Change Score and AI Contribution Tracker",
+      "Investment Allocation and Team Allocation Dashboards",
+      "Open Integration Framework (GitHub, Jira, Linear, Slack)",
     ],
   },
   {
-    version: "v1.0 — MVP",
+    version: "v1.0 — MVP Launch",
     items: [
-      "GitHub App install flow and push/PR ingestion",
-      "LLM-backed diff analysis producing structured Evidence Items",
-      "Per-ticket Confidence Scores with a visible rationale",
-      "Claimed-vs-shipped reconciliation flags",
-      "Auto-drafted daily standups",
-      "PM dashboard and developer view",
+      "GitHub connection (OAuth + App install, read-only scopes)",
+      "Deep commit/PR analysis with plain-English summaries",
+      "Evidence Ledger (cited evidence behind every judgment)",
+      "Completion-confidence score per ticket",
+      "Auto-drafted standup update and Claimed vs Shipped view",
+      "Mismatch alerts (framed as questions) and PM/Developer dashboards",
     ],
   },
 ];
@@ -44,20 +47,24 @@ const RELEASES = [
 export default function ChangelogPage() {
   return (
     <>
-      <PageHeader eyebrow="Changelog" title="What's shipped." />
+      <Section variant="default" className="bg-slate-50 pb-16 pt-20 border-b border-slate-200 relative overflow-hidden">
+        <DotPattern className="opacity-60" />
+        <PageHeader eyebrow="Changelog" title="What's shipped." subtitle="We release updates constantly. Here is the major historical log." />
+      </Section>
       <Section>
-        <div className="mx-auto max-w-2xl space-y-12">
+        <div className="mx-auto max-w-3xl space-y-12">
           {RELEASES.map((release) => (
-            <div key={release.version}>
-              <h2 className="text-lg font-semibold text-slate-900">{release.version}</h2>
-              <ul className="mt-4 space-y-2 border-l border-slate-200 pl-4">
+            <MagicCard key={release.version} className="relative overflow-hidden shadow-sm bg-white border-slate-200 h-auto flex flex-col">
+              <h2 className="text-xl font-bold text-slate-900 border-b border-slate-200 pb-4 mb-4">{release.version}</h2>
+              <ul className="space-y-3">
                 {release.items.map((item) => (
-                  <li key={item} className="text-sm text-slate-600">
-                    {item}
+                  <li key={item} className="flex gap-3 text-sm text-slate-600">
+                    <span className="text-[var(--accent-neon-hover)] mt-0.5">●</span>
+                    <span className="leading-relaxed">{item}</span>
                   </li>
                 ))}
               </ul>
-            </div>
+            </MagicCard>
           ))}
         </div>
       </Section>

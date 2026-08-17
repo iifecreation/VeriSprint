@@ -36,11 +36,19 @@ export default function AuthCallbackPage() {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-red-600">
-        {error} <a href="/login" className="underline">Back to sign in</a>
+      <div className="mx-auto flex min-h-[70vh] max-w-sm flex-col items-center justify-center px-6 text-center text-sm text-rose-600">
+        {error}{" "}
+        <a href="/login" className="mt-2 font-semibold underline">
+          Back to sign in
+        </a>
       </div>
     );
   }
 
-  return <div className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-gray-400">Signing you in…</div>;
+  return (
+    <div className="flex min-h-[70vh] items-center justify-center gap-2 text-sm text-slate-400">
+      <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-[var(--accent-neon)]" />
+      Signing you in…
+    </div>
+  );
 }

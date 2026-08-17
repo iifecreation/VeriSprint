@@ -24,7 +24,8 @@ export type FlagType =
   | "low_confidence"
   | "ticket_drift"
   | "orphan_commit"
-  | "anomaly_activity_drop";
+  | "anomaly_activity_drop"
+  | "possible_blocker";
 
 export type ReconciliationFlag = {
   id: string;
@@ -328,6 +329,129 @@ export type TeamGoal = {
   created_at: string;
 };
 
+// --- Phase 3 competitor-parity features (part 2) ------------------------------
+
+export type PullRequest = {
+  id: string;
+  repo_id: string;
+  number: number;
+  title: string;
+  author_github_login: string;
+  state: string;
+  opened_at: string;
+  merged_at: string | null;
+  linked_ticket_key: string | null;
+};
+
+export type ReviewerSuggestion = { file_path: string; suggested_reviewers: string[]; basis: string };
+
+export type PRAutoRouteResult = {
+  pr_number: number;
+  suggestions: ReviewerSuggestion[];
+  top_suggested_reviewers: string[];
+};
+
+export type ValueStreamStage = { status: string; avg_hours: number; sample_count: number };
+
+export type ValueStreamReport = {
+  period_start: string;
+  period_end: string;
+  stages: ValueStreamStage[];
+  tracked_ticket_count: number;
+};
+
+export type CapitalizationEntry = {
+  category: "capitalizable_new_development" | "non_capitalizable_maintenance";
+  ticket_count: number;
+  commit_count: number;
+  estimated_hours: number;
+  estimated_cost_usd: number | null;
+};
+
+export type CapitalizationReport = {
+  period_start: string;
+  period_end: string;
+  hourly_rate_usd: number | null;
+  entries: CapitalizationEntry[];
+  method_note: string;
+};
+
+export type DeliveryForecast = {
+  sprint_id: string;
+  method: string;
+  current_confidence_weighted_complete: number;
+  planned_tickets: number;
+  velocity_per_day: number | null;
+  projected_completion_date: string | null;
+  projection_note: string | null;
+};
+
+export type ContributorStat = {
+  author_github_login: string;
+  commit_count: number;
+  ai_assisted_commit_count: number;
+  ai_assisted_pct: number;
+};
+
+export type ContributionReport = {
+  period_start: string;
+  period_end: string;
+  contributors: ContributorStat[];
+  method_note: string;
+};
+
+export type AllocationEntry = { label: string; commit_count: number; additions: number; deletions: number; pct_of_commits: number };
+
+export type AllocationReport = {
+  period_start: string;
+  period_end: string;
+  by_repo: AllocationEntry[];
+  by_person: AllocationEntry[];
+};
+
+export type ChangelogDay = { day: string; merged_pr_count: number; commit_count: number; entries: string[] };
+
+export type PulseSurvey = {
+  id: string;
+  workspace_id: string;
+  question: string;
+  closes_at: string | null;
+  response_count: number;
+  average_score: number | null;
+  created_at: string;
+};
+
+export type WorkingAgreement = {
+  id: string;
+  workspace_id: string;
+  repo_id: string | null;
+  title: string;
+  body_markdown: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IntegrationStatusValue = "connected" | "disconnected" | "error";
+
+export type Integration = {
+  id: string;
+  workspace_id: string;
+  provider: string;
+  status: string;
+  connected_at: string | null;
+  created_at: string;
+};
+
+export type WorkspaceSSOConfig = {
+  id: string;
+  workspace_id: string;
+  issuer: string;
+  client_id: string;
+  enabled: boolean;
+  has_scim_token: boolean;
+  created_at: string;
+};
+
 async function doFetch(path: string, init: RequestInit | undefined, accessToken: string | null): Promise<Response> {
   return fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -480,6 +604,58 @@ export const api = {
   listTeamGoals: (workspaceId: string) => apiFetch<TeamGoal[]>(`/goals?workspace_id=${workspaceId}`),
   createTeamGoal: (payload: { name: string; metric_key: string; target_value: number; period_start: string; period_end: string; repo_id?: string | null }) =>
     apiFetch<TeamGoal>("/goals", { method: "POST", body: JSON.stringify(payload) }),
+
+  // --- PR AutoRoute ---
+  listPullRequests: (repoId: string) => apiFetch<PullRequest[]>(`/pr-autoroute/pull-requests?repo_id=${repoId}`),
+  suggestReviewers: (pullRequestId: string) => apiFetch<PRAutoRouteResult>(`/pr-autoroute/${pullRequestId}/suggest`),
+
+  // --- Value Stream View ---
+  getValueStream: (repoId: string, periodStart: string, periodEnd: string) =>
+    apiFetch<ValueStreamReport>(`/value-stream?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
+
+  // --- Cost Capitalization ---
+  getCapitalization: (repoId: string, periodStart: string, periodEnd: string) =>
+    apiFetch<CapitalizationReport>(`/capitalization?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
+
+  // --- Delivery Forecast ---
+  getDeliveryForecast: (sprintId: string) => apiFetch<DeliveryForecast>(`/forecast/${sprintId}`),
+
+  // --- AI Contribution Tracker ---
+  getContributions: (repoId: string, periodStart: string, periodEnd: string) =>
+    apiFetch<ContributionReport>(`/contributions?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
+
+  // --- Investment Allocation Dashboard ---
+  getAllocation: (workspaceId: string, periodStart: string, periodEnd: string) =>
+    apiFetch<AllocationReport>(`/allocation?workspace_id=${workspaceId}&period_start=${periodStart}&period_end=${periodEnd}`),
+
+  // --- Visual Changelog ---
+  getChangelog: (repoId: string, periodStart: string, periodEnd: string) =>
+    apiFetch<ChangelogDay[]>(`/changelog?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
+
+  // --- Pulse Surveys ---
+  listPulseSurveys: (workspaceId: string) => apiFetch<PulseSurvey[]>(`/pulse-surveys?workspace_id=${workspaceId}`),
+  createPulseSurvey: (payload: { question: string; closes_at?: string | null }) =>
+    apiFetch<PulseSurvey>("/pulse-surveys", { method: "POST", body: JSON.stringify(payload) }),
+  respondToPulseSurvey: (surveyId: string, score: number, comment?: string) =>
+    apiFetch<{ ok: boolean }>(`/pulse-surveys/${surveyId}/respond`, { method: "POST", body: JSON.stringify({ score, comment }) }),
+
+  // --- Working Agreements ---
+  listWorkingAgreements: (workspaceId: string) => apiFetch<WorkingAgreement[]>(`/working-agreements?workspace_id=${workspaceId}`),
+  upsertWorkingAgreement: (title: string, payload: { body_markdown: string; repo_id?: string | null }) =>
+    apiFetch<WorkingAgreement>(`/working-agreements/${encodeURIComponent(title)}`, { method: "PUT", body: JSON.stringify(payload) }),
+
+  // --- Open Integration Framework ---
+  listIntegrations: (workspaceId: string) => apiFetch<Integration[]>(`/integrations?workspace_id=${workspaceId}`),
+  connectIntegration: (provider: string, config: Record<string, string>) =>
+    apiFetch<Integration>("/integrations/connect", { method: "POST", body: JSON.stringify({ provider, config }) }),
+  disconnectIntegration: (integrationId: string) =>
+    apiFetch<Integration>(`/integrations/${integrationId}/disconnect`, { method: "POST" }),
+
+  // --- Workspace SSO / SCIM config ---
+  getSSOConfig: () => apiFetch<WorkspaceSSOConfig | null>("/sso-config"),
+  upsertSSOConfig: (payload: { issuer: string; client_id: string; client_secret: string; enabled: boolean }) =>
+    apiFetch<WorkspaceSSOConfig>("/sso-config", { method: "PUT", body: JSON.stringify(payload) }),
+  rotateSCIMToken: () => apiFetch<{ scim_token: string }>("/sso-config/rotate-scim-token", { method: "POST" }),
 };
 
 export { API_BASE_URL };

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { decodeAccessTokenClaims, isLoggedIn, logout } from "@/lib/auth";
+import { ADMIN_APP_URL } from "@/lib/config";
 
 // `roles: undefined` means "any logged-in internal role" (everything except
 // the read-only Client Portal role, which shouldn't be browsing this app at
@@ -17,6 +18,9 @@ const LINKS: { href: string; label: string; roles?: string[] }[] = [
   { href: "/standup", label: "Standups" },
   { href: "/sprints", label: "Sprints" },
   { href: "/insights", label: "Insights" },
+  { href: "/analytics", label: "Analytics" },
+  { href: "/reviewers", label: "Reviewers" },
+  { href: "/team", label: "Team" },
   { href: "/reports", label: "Reports" },
   { href: "/orphan-commits", label: "Orphan Commits" },
   { href: "/accuracy", label: "Accuracy" },
@@ -50,21 +54,33 @@ export function TopNav() {
   const visibleLinks = LINKS.filter((link) => !link.roles || isSuperAdmin || link.roles.includes(role ?? ""));
 
   return (
-    <header className="border-b border-gray-200 bg-white">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-y-2 px-4 py-3">
-        <Link href="/" className="font-semibold text-gray-900">
+    <header className="glass-nav sticky top-0 z-50">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3.5">
+        <Link href="/" className="flex shrink-0 items-center gap-2 text-lg font-bold tracking-tight text-slate-900">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--accent-neon)] text-[#3f6212]" aria-hidden>
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+            </svg>
+          </span>
           VeriSprint
         </Link>
-        <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+        <nav className="hidden flex-1 flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-slate-600 lg:flex">
           {visibleLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="hover:text-gray-900">
+            <Link key={link.href} href={link.href} className="whitespace-nowrap transition-colors hover:text-slate-900">
               {link.label}
             </Link>
           ))}
+        </nav>
+        <div className="flex shrink-0 items-center gap-3 text-sm">
           {isSuperAdmin && (
-            <Link href="/admin" className="font-medium text-gray-900 hover:text-gray-700">
-              Admin
-            </Link>
+            // External link, not an in-app route — the operator console is
+            // its own separate deploy (apps/admin), not a page in this app.
+            <a
+              href={ADMIN_APP_URL}
+              className="hidden items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 sm:inline-flex"
+            >
+              Operator Console ↗
+            </a>
           )}
           {loggedIn ? (
             <button
@@ -72,17 +88,28 @@ export function TopNav() {
                 await logout();
                 router.push("/login");
               }}
-              className="hover:text-gray-900"
+              className="font-semibold text-slate-600 transition-colors hover:text-slate-900"
             >
               Log out
             </button>
           ) : (
-            <Link href="/login" className="hover:text-gray-900">
+            <Link
+              href="/login"
+              className="rounded-full bg-[var(--accent-neon)] px-4 py-2 text-sm font-bold text-slate-900 transition-all hover:bg-[var(--accent-neon-hover)] hover:scale-105"
+            >
               Sign in
             </Link>
           )}
-        </nav>
+        </div>
       </div>
+      {/* Second row on smaller screens where the full link list can't fit inline. */}
+      <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-200/60 px-6 py-2 text-xs font-medium text-slate-500 lg:hidden">
+        {visibleLinks.map((link) => (
+          <Link key={link.href} href={link.href} className="whitespace-nowrap transition-colors hover:text-slate-900">
+            {link.label}
+          </Link>
+        ))}
+      </nav>
     </header>
   );
 }

@@ -32,6 +32,7 @@ async def list_orphan_commits(repo: Repo = Depends(get_repo_for_user), db: Async
         )
         .where(Commit.repo_id == repo.id)
         .order_by(Commit.committed_at.desc())
+        .limit(500)
     )
     return list(result.scalars().all())
 

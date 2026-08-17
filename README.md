@@ -32,16 +32,28 @@ out beyond code review.
 ```
 apps/
   web/              Next.js frontend (app) — dashboard, dev view, chat,
-                     standups, sprints/burndown, reports, orphan commits,
-                     accuracy, ROI, audit log, settings, public client portal,
-                     login/OAuth callback, Super-Admin Dashboard
+                     standups, sprints/burndown (+ delivery forecast),
+                     insights, analytics (value stream, cost capitalization,
+                     investment allocation, visual changelog, AI contribution
+                     tracker), reviewers (PR AutoRoute), team (pulse surveys,
+                     working agreements), reports, orphan commits, accuracy,
+                     ROI, audit log, settings (+ integrations, SSO/SCIM
+                     config), public client portal, login/OAuth callback.
+                     Shares apps/marketing's design system (sky-gradient/
+                     neon-lime/glass-card) as its own copy — no shared
+                     package, each app is a fully independent deploy.
+  admin/            Next.js operator console — a separate app/deploy from
+                     apps/web (own login, own dark "control room" theme,
+                     own localStorage token keys) hitting the same backend
+                     API. Overview, Workspaces, Users, Errors, Metrics,
+                     Revenue, Flags, Audit — super_admin accounts only.
   marketing/        Next.js public marketing site — homepage, features,
                      how it works, pricing, security & trust, docs,
                      changelog, about, contact — a separate app/deploy from
                      apps/web, with no auth or API-mutating calls of its own
   api/              FastAPI backend
     app/
-      routers/      ~25 HTTP route modules
+      routers/      ~35 HTTP route modules
       workers/      arq background jobs (ingestion, analysis, confidence,
                      reconciliation, drift, orphans, anomalies, reports,
                      digest, system metrics)
@@ -154,31 +166,36 @@ every outstanding token for that user, not just future ones.
 | Anomaly check-in nudges (5.9) | `workers/anomaly.py` | flags on `/dashboard` |
 | Multi-repo intelligence (5.10) | `routers/work_units.py` | — (API only) |
 | Private/On-Prem LLM (5.11) | `integrations/llm_client.py` (provider dispatch) | — (config only) |
-| Compliance & Audit Trail (5.12) | `audit.py`, `routers/audit.py`, `routers/admin.py` (cross-tenant) | `/audit`, `/admin` |
+| Compliance & Audit Trail (5.12) | `audit.py`, `routers/audit.py`, `routers/admin.py` (cross-tenant) | `/audit`, `apps/admin` |
 | **Auth: JWT + RBAC + email/password fallback** | `app/auth/`, `routers/auth.py` | `/login`, `/auth/callback` |
-| **Super-Admin Dashboard (8 panels)** | `routers/admin.py` | `/admin` |
+| **Super-Admin Dashboard (8 panels)** | `routers/admin.py` | `apps/admin` (separate app) |
 | **Billing: Stripe + FeatureFlag gating** | `integrations/stripe_client.py`, `routers/billing.py`, `feature_flags.py` | `/insights` (gated panels) |
-| **Error/metrics observability** | `observability.py`, global exception handler, `workers/metrics.py` cron | `/admin` (Errors, Metrics panels) |
+| **Error/metrics observability** | `observability.py`, global exception handler, `workers/metrics.py` cron | `apps/admin` (Errors, Metrics panels) |
 | **Public marketing site (9 pages)** | — | `apps/marketing` (separate app) |
 | **DORA Panel** | `routers/dora.py` | `/insights` |
-| **Blocker Nudge Bot** | `workers/blockers.py` | flags on `/dashboard` |
+| **Blocker Nudge Bot** | `workers/blockers.py` | flags on `/dashboard` (`possible_blocker` flag type) |
 | **Team Goals & Targets** | `goals.py`, `routers/goals.py` | `/insights` |
 | **Code Health Signals** | `routers/code_health.py` | `/insights` |
-| **Visual Changelog** | `routers/changelog.py` | — (API only) |
-| **AI Contribution Tracker** | `routers/contributions.py` | — (API only) |
-| **Investment Allocation Dashboard** | `routers/allocation.py` | — (API only) |
+| **Visual Changelog** | `routers/changelog.py` | `/analytics` |
+| **AI Contribution Tracker** | `routers/contributions.py` | `/analytics` |
+| **Investment Allocation Dashboard** | `routers/allocation.py` | `/analytics` |
 | **Risk Radar** | `routers/risk.py` | `/insights` |
-| **Open Integration Framework (scaffolding)** | `routers/integrations.py` | — (API only) |
-| **PR AutoRoute** | `routers/pr_autoroute.py` | — (API only) |
-| **Pulse Surveys & Working Agreements** | `routers/pulse.py`, `routers/working_agreements.py` | — (API only) |
-| **Delivery Forecast** (statistical, not ML — see router docstring) | `routers/forecast.py` | — (API only) |
-| **Value Stream View** | `routers/value_stream.py`, `TicketStatusChange` | — (API only) |
-| **Cost Capitalization Report** | `routers/capitalization.py` | — (API only) |
-| **SSO/SCIM extension (per-workspace)** | `routers/sso_config.py`, `routers/scim.py` | — (API only) |
+| **Open Integration Framework (scaffolding)** | `routers/integrations.py` | `/settings` |
+| **PR AutoRoute** | `routers/pr_autoroute.py` | `/reviewers` |
+| **Pulse Surveys & Working Agreements** | `routers/pulse.py`, `routers/working_agreements.py` | `/team` |
+| **Delivery Forecast** (statistical, not ML — see router docstring) | `routers/forecast.py` | `/sprints` (per-sprint panel) |
+| **Value Stream View** | `routers/value_stream.py`, `TicketStatusChange` | `/analytics` |
+| **Cost Capitalization Report** | `routers/capitalization.py` | `/analytics` |
+| **SSO/SCIM extension (per-workspace)** | `routers/sso_config.py`, `routers/scim.py` | `/settings` (SCIM itself is IdP-facing, no UI) |
 
-Routers marked "API only" are real, tested (see verification notes below),
-and reachable via the documented endpoints — they don't yet have dedicated
-frontend pages beyond what's surfaced on `/insights`.
+Every Phase 2/3 feature above now has a dedicated frontend surface — the
+last API-only gaps (PR AutoRoute, Value Stream, Cost Capitalization,
+Delivery Forecast, Pulse Surveys, Working Agreements, Visual Changelog, AI
+Contribution Tracker, Investment Allocation, Open Integration Framework,
+SSO/SCIM config) were closed out together with the `apps/admin` split.
+Each panel still respects its own `FeatureFlag` — most default off, same as
+before, so a fresh workspace sees "not enabled" until a Super Admin turns
+one on from `apps/admin` → Flags.
 
 ## Demo checklist (Phase 1 definition of done)
 
@@ -283,6 +300,13 @@ harmless to delete, kept for convenience): `superadmin@verisprint.dev`
 `dev2@example.com` (manager), `smoketest@example.com` (developer, no
 workspace), `clientuser@example.com` (client, no workspace). Password for
 each is printed in this repo's git history / session notes, not committed
-here — reset via `POST /auth/request-password-reset` if lost. All Phase 2/3
-`FeatureFlag`s default to `enabled_globally: false`; toggle from
-`/admin` → Flags to see their panels on `/insights`.
+here — reset via `POST /auth/request-password-reset` if lost (rate-limited,
+see below). All Phase 2/3 `FeatureFlag`s default to `enabled_globally: false`;
+toggle from `apps/admin` → Flags to see their panels light up across
+`/insights`, `/analytics`, `/reviewers`, `/team`, `/sprints`, and `/settings`.
+
+`/auth/login` and `/auth/request-password-reset` are rate-limited
+(`app/auth/rate_limit.py`, Redis-backed fixed window — 10 login attempts /
+15 min per email plus 20/5 min per IP; 3 reset requests / hour per email
+plus 5/hour per IP) and fail *open* if Redis is unreachable, so a limiter
+outage degrades to "unprotected," not "logins are down."

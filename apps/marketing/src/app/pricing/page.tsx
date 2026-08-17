@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader, Section, Card, CheckIcon, PrimaryButton, SecondaryButton } from "@/components/ui";
 import { INSTALL_URL, CONTACT_EMAIL } from "@/lib/config";
+import { BorderBeam } from "@/components/magicui/border-beam";
 
 export const metadata: Metadata = { title: "Pricing — VeriSprint" };
 
@@ -34,7 +35,7 @@ const TIERS: Tier[] = [
     priceNote: "Talk to us for current pricing",
     description: "For a single team shipping across a few repos.",
     cta: { label: "Contact us", href: `mailto:${CONTACT_EMAIL}?subject=VeriSprint Team plan` },
-    features: ["Everything in Free", "Multiple repos", "Sprint rollups & burndown", "Historical accuracy", "Slack digests"],
+    features: ["Everything in Free", "Multiple repos", "Sprint rollups & burndown", "Historical accuracy", "Slack digests", "DORA metrics panel"],
   },
   {
     name: "Growth",
@@ -47,7 +48,8 @@ const TIERS: Tier[] = [
       "Everything in Team",
       "Multi-repo intelligence",
       "Investor updates",
-      "ROI calculator",
+      "Risk Radar & Delivery Forecast",
+      "Investment Allocation",
       "Anomaly check-in nudges",
     ],
   },
@@ -65,51 +67,65 @@ const TIERS: Tier[] = [
     priceNote: "Sales-assisted onboarding",
     description: "SSO, on-prem/private LLM, and a dedicated setup — provisioned directly, not through self-serve checkout.",
     cta: { label: "Talk to sales", href: `mailto:${CONTACT_EMAIL}?subject=VeriSprint Enterprise` },
-    features: ["Everything in Agency", "SSO (OIDC/SAML)", "Private or on-prem LLM option", "Compliance audit trail export", "Dedicated support"],
+    features: ["Everything in Agency", "SSO (OIDC/SAML)", "Private or on-prem LLM option", "Compliance audit trail", "Cost Capitalization reporting"],
   },
 ];
 
 export default function PricingPage() {
   return (
     <>
-      <PageHeader
-        eyebrow="Pricing"
-        title="Start free. Upgrade when you need more repos or reporting."
-        subtitle="We're in early access, so paid pricing is confirmed directly with our team rather than a fixed self-serve price — the Free tier itself has no time limit and no credit card required."
-      />
-      <Section>
-        <div className="grid gap-6 lg:grid-cols-5">
+      <Section variant="default" className="bg-slate-50 pb-16 pt-20 border-b border-slate-200">
+        <PageHeader
+          eyebrow="Pricing"
+          title="Start free. Upgrade when you need more repos or reporting."
+          subtitle="We're in early access, so paid pricing is confirmed directly with our team rather than a fixed self-serve price — the Free tier itself has no time limit and no credit card required."
+        />
+      </Section>
+      <Section className="bg-slate-50">
+        <div className="mx-auto max-w-7xl grid gap-6 lg:grid-cols-5">
           {TIERS.map((tier) => (
-            <Card key={tier.name} className={tier.highlighted ? "border-indigo-300 ring-1 ring-indigo-200" : ""}>
-              <h3 className="text-lg font-semibold text-slate-900">{tier.name}</h3>
-              <p className="mt-3 text-3xl font-semibold text-slate-900">{tier.price}</p>
-              {tier.priceNote && <p className="mt-1 text-xs text-slate-400">{tier.priceNote}</p>}
-              <p className="mt-3 text-sm text-slate-600">{tier.description}</p>
-              <ul className="mt-5 space-y-2">
+            <Card key={tier.name} className={`relative flex flex-col h-full bg-white transition-all hover:shadow-lg ${tier.highlighted ? 'ring-2 ring-[var(--accent-neon)] shadow-[0_0_20px_rgba(101,163,13,0.15)] -translate-y-2' : 'shadow-sm'}`}>
+              {tier.highlighted && (
+                <>
+                  <BorderBeam size={250} duration={12} delay={9} />
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 bg-[var(--accent-neon)] text-slate-900 text-xs font-bold uppercase tracking-wider font-monor rounded-full shadow-sm whitespace-nowrap z-10">
+                    Most Popular
+                  </div>
+                </>
+              )}
+              <div className="mb-6 border-b border-slate-200 pb-6">
+                <h3 className="text-xl font-bold text-slate-900">{tier.name}</h3>
+                <div className="mt-4 flex items-baseline gap-1">
+                   <p className="text-4xl font-extrabold text-slate-900 tracking-tight">{tier.price}</p>
+                </div>
+                {tier.priceNote && <p className="mt-2 text-xs font-medium text-slate-500 uppercase tracking-wider font-mono">{tier.priceNote}</p>}
+                <p className="mt-4 text-sm text-slate-600 leading-relaxed">{tier.description}</p>
+              </div>
+              <ul className="flex-1 space-y-3 mb-8">
                 {tier.features.map((f) => (
-                  <li key={f} className="flex gap-2 text-sm text-slate-600">
-                    <CheckIcon />
-                    {f}
+                  <li key={f} className="flex gap-3 text-sm text-slate-600">
+                    <span className="flex-shrink-0 text-blue-500"><CheckIcon /></span>
+                    <span className="leading-relaxed">{f}</span>
                   </li>
                 ))}
               </ul>
-              <div className="mt-6">
+              <div className="mt-auto">
                 {tier.highlighted ? (
-                  <PrimaryButton href={tier.cta.href}>{tier.cta.label}</PrimaryButton>
+                  <PrimaryButton href={tier.cta.href} className="w-full justify-center">{tier.cta.label}</PrimaryButton>
                 ) : (
-                  <SecondaryButton href={tier.cta.href}>{tier.cta.label}</SecondaryButton>
+                  <SecondaryButton href={tier.cta.href} className="w-full justify-center border-slate-200">{tier.cta.label}</SecondaryButton>
                 )}
               </div>
             </Card>
           ))}
         </div>
       </Section>
-      <Section muted>
+      <Section variant="default" className="bg-slate-50 border-t border-slate-200">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-xl font-semibold text-slate-900">Questions about a plan?</h2>
-          <p className="mt-2 text-slate-600">
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Questions about a plan?</h2>
+          <p className="mt-4 text-slate-600 text-lg">
             Email{" "}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-indigo-600 hover:text-indigo-700">
+            <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-brand hover:text-blue-600 transition-colors">
               {CONTACT_EMAIL}
             </a>{" "}
             and we&apos;ll get back to you.

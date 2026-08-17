@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     env: str = Field(default="development", alias="ENV")
     api_base_url: str = Field(default="http://localhost:58000", alias="API_BASE_URL")
     web_base_url: str = Field(default="http://localhost:53000", alias="WEB_BASE_URL")
+    # Separate frontend deploys (spec: admin console split from the product
+    # app) — both need CORS + admin_base_url doubles as the SCIM/OIDC
+    # audience-adjacent origin. marketing_base_url currently makes no
+    # API-mutating calls but is allowed anyway so a future one doesn't
+    # silently CORS-fail.
+    admin_base_url: str = Field(default="http://localhost:53200", alias="ADMIN_BASE_URL")
+    marketing_base_url: str = Field(default="http://localhost:53100", alias="MARKETING_BASE_URL")
 
     # Postgres (structured data). Port 55432, not 5432 — see docker-compose.yml.
     database_url: str = Field(
