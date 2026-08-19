@@ -1,51 +1,90 @@
-import { Section, Card, SecondaryButton } from "@/components/ui";
+import { Section, Card, SecondaryButton, FAQSection, TrustBadgeRow } from "@/components/ui";
 import { INSTALL_URL } from "@/lib/config";
 import Link from "next/link";
 import { DotPattern } from "@/components/magicui/dot-pattern";
 import { ShimmerButton } from "@/components/magicui/shimmer-button";
-import Marquee from "@/components/magicui/marquee";
 import { MagicCard } from "@/components/magicui/magic-card";
+import { Reveal, RevealGroup, RevealItem } from "@/components/Reveal";
+import { HeroParallax } from "@/components/HeroParallax";
+import {
+  ShieldCheck,
+  MessagesSquare,
+  TrendingUp,
+  Sparkles,
+  Rocket,
+  Radar,
+  Check,
+  Minus,
+  Landmark,
+  ClipboardCheck,
+  Building2,
+  UserCog,
+  Code2,
+  GraduationCap,
+} from "lucide-react";
 
 const PILLARS = [
-  { title: "Evidence-first judgment", body: "Every score is traceable to cited evidence (tests, call graph, TODOs) — inspectable, not a black box." },
-  { title: "Developer-first framing", body: "Saves developers time first with auto-drafted standups. Verification for PMs is a byproduct of a tool devs actually like." },
-  { title: "Outward-facing", body: "The same engine powers client proof-of-work portals, investor updates, and new-hire onboarding docs." },
-  { title: "Narrow, fast, self-serve", body: "No sales call, no multi-week rollout. Get value the same day you connect a repo." },
+  { icon: ShieldCheck, title: "Evidence-first judgment", body: "Every score is traceable to cited evidence (tests, call graph, TODOs, acceptance-criteria match) — inspectable, not a black box. Click a score, see exactly why." },
+  { icon: Code2, title: "Developer-first framing", body: "Saves developers time first, with auto-drafted standups and onboarding docs. Verification for PMs is a byproduct of a tool developers actually want to use, not a surveillance layer imposed on them." },
+  { icon: Rocket, title: "Outward-facing, not just internal", body: "The same engine faces clients (agency proof-of-work portal), investors (update generator), and new hires (onboarding docs) — audiences the engineering-intelligence category never touches." },
+  { icon: Sparkles, title: "Narrow, fast, self-serve", body: "No sales call, no multi-week rollout, no dedicated implementation team. Connect a repo and see your first Evidence Ledger the same day." },
 ];
 
 const PERSONAS = [
-  { role: "Founders & Execs", need: "Know if progress is real before the next investor update.", feature: "Investor Update Generator" },
-  { role: "Product Managers", need: "Verify standup claims without manually reading code diffs.", feature: "Claimed vs Shipped & Risk Radar" },
-  { role: "Agency Owners", need: "Prove billed hours match real delivered work to clients.", feature: "Client Proof-of-Work Portal" },
-  { role: "Developers", need: "Stop re-explaining work; get credit for real progress automatically.", feature: "Auto-Drafted Standups" },
+  { icon: Landmark, role: "Founders & Execs", need: "Know if progress is real before the next investor update, without pulling an engineer off real work to translate it for you.", feature: "Investor Update Generator" },
+  { icon: ClipboardCheck, role: "Product Managers", need: "Verify standup claims without learning to read a diff yourself — the evidence is already summarized in plain English.", feature: "Claimed vs Shipped & Risk Radar" },
+  { icon: Building2, role: "Agency Owners", need: "Prove billed hours match real delivered work, with a link a client can check any time — no codebase access required.", feature: "Client Proof-of-Work Portal" },
+  { icon: UserCog, role: "Engineering Managers", need: "Spot stuck work and team health signals before they become a missed deadline, not after.", feature: "Blocker Nudge Bot & DORA Panel" },
+  { icon: Code2, role: "Developers", need: "Stop re-explaining work in every standup; get credit for real progress automatically, and see the exact same evidence a PM sees about you.", feature: "Auto-Drafted Standups" },
+  { icon: GraduationCap, role: "New Hires", need: "Understand an unfamiliar codebase fast, from docs generated off what actually changed recently and why.", feature: "Onboarding Doc Generator" },
 ];
 
 const STEPS = [
   {
     title: "Connect a repo",
-    body: "Install the read-only GitHub App. VeriSprint reads commits, diffs, and PR metadata to build evidence.",
-    metric: "100%",
-    metricLabel: "Transparent Analysis",
+    body: "Install the read-only GitHub App — Contents, Metadata, and Pull Requests only. VeriSprint can never push code, merge a PR, or touch a repo setting.",
+    metric: "Read-only",
+    metricLabel: "GitHub App scopes",
   },
   {
-    title: "Every commit is evidence",
-    body: "Each diff is analyzed for tests added, TODOs, and dead code — logged as an Evidence Item.",
-    metric: "120+",
-    metricLabel: "Code Points Checked",
+    title: "Every commit becomes evidence",
+    body: "Each diff is checked for tests added, TODOs, dead code, and call-graph context — logged as a structured, inspectable Evidence Item, not a one-line summary.",
+    metric: "Cited",
+    metricLabel: "Every judgment, traceable",
   },
   {
-    title: "Real Confidence Scores",
-    body: "Tickets get a 0–100 score based on their Evidence Ledger. Score and rationale are always visible.",
-    metric: "320k",
-    metricLabel: "Commits Verified",
+    title: "A real Confidence Score",
+    body: "Tickets get a 0–100 score computed from their own Evidence Ledger, with the plain-English rationale always visible next to the number — never a bare score with no explanation.",
+    metric: "0–100",
+    metricLabel: "Per-ticket, with rationale",
   },
 ];
 
 const FEATURES = [
-  { title: "Confidence Score", body: "A transparent 0–100 score per ticket, with the evidence always one click away." },
-  { title: "Claimed vs. Shipped", body: "Flags mismatches as questions — 'ENG-123 is Done — should tests be added?'" },
-  { title: "AI Repo Chat", body: "Ask your codebase questions, answered with citations back to real commits." },
-  { title: "Confidence-Weighted Burndown", body: "A burndown built from real ConfidenceScore history." },
+  {
+    icon: ShieldCheck,
+    title: "Confidence Score",
+    body: "A transparent 0–100 score per ticket, computed from that ticket's own Evidence Ledger — with the evidence always one click away, never a black-box number.",
+    mock: { label: "ENG-409", value: "78 / 100", note: "tests added, 1 branch uncovered" },
+  },
+  {
+    icon: Radar,
+    title: "Claimed vs. Shipped",
+    body: "Flags mismatches as questions, never accusations — 'ENG-123 is marked Done — I don't see tests added yet, did those land under a different commit?'",
+    mock: { label: "ENG-123", value: "Flagged", note: "tests missing — different commit?" },
+  },
+  {
+    icon: MessagesSquare,
+    title: "AI Repo Chat",
+    body: "Ask your codebase a plain question — 'did we ship the checkout redesign this week?' — and get an answer grounded in real commits, with citations back to the exact diffs.",
+    mock: { label: "Query", value: "6 commits", note: "PR #412 merged Thu · 2 citations" },
+  },
+  {
+    icon: TrendingUp,
+    title: "Confidence-Weighted Burndown",
+    body: "A sprint burndown built from real Confidence Score history instead of self-reported percentages — a materially more honest read on whether a sprint is actually on track.",
+    mock: { label: "Sprint 12", value: "68% complete", note: "confidence-weighted, not self-reported" },
+  },
 ];
 
 const COMPARISON_MATRIX = [
@@ -66,25 +105,31 @@ export default function HomePage() {
       <Section variant="default" className="min-h-[85vh] flex flex-col justify-center pb-32 border-b border-slate-200 relative overflow-hidden">
         <DotPattern className="opacity-60" />
         <div className="mx-auto max-w-4xl text-center relative z-20 pt-10">
+          <p className="mb-6 inline-flex items-center rounded-full bg-brand/20 px-4 py-1.5 text-xs font-mono font-semibold text-[var(--accent-neon)] ring-1 ring-[var(--accent-neon)]/30 ring-inset uppercase tracking-wider">
+            The Proof-of-Work Platform for Software Teams
+          </p>
           <h1 className="text-5xl font-extrabold tracking-tight text-slate-900 sm:text-7xl !leading-tight">
-            Building the future with <br />
-            <span className="text-brand">AI and strategy</span>
+            What your team actually shipped —<br />
+            <span className="text-brand">and proof it happened.</span>
           </h1>
           <p className="mx-auto mt-8 max-w-2xl text-xl text-slate-600 leading-relaxed">
-            What actually shipped — backed by commits. VeriSprint reads real GitHub activity, turns it into an Evidence Ledger and a per-ticket Confidence Score.
+            VeriSprint reads every commit and pull request in depth and turns raw code activity into a verified,
+            plain-language account of what was really built — reconciled against what was claimed in standups,
+            tickets, and status updates.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row relative z-20">
             <Link href={INSTALL_URL} className="w-full sm:w-auto">
               <ShimmerButton background="#001666" className="w-full text-lg shadow-[0_0_50px_rgba(0,22,102,0.3)]">
-                Get Started <span className="ml-2">→</span>
+                Connect a repo, free <span className="ml-2">→</span>
               </ShimmerButton>
             </Link>
             <SecondaryButton href="/how-it-works" className="w-full sm:w-auto text-lg px-10 py-4">See how it works</SecondaryButton>
           </div>
+          <p className="mt-6 text-sm text-slate-400">No credit card. No sales call. First Evidence Ledger the same day you connect.</p>
         </div>
 
         {/* Terminal/IDE Mock UI Dashboard */}
-        <div className="mx-auto mt-20 max-w-5xl relative z-10">
+        <HeroParallax className="mx-auto mt-20 max-w-5xl relative z-10">
           <div className="rounded-xl border border-slate-200 bg-white shadow-[0_0_50px_rgba(0,22,102,0.3)] overflow-hidden flex flex-col font-mono">
             {/* Terminal header */}
             <div className="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between">
@@ -128,65 +173,75 @@ export default function HomePage() {
               </div>
             </div>
           </div>
-        </div>
+        </HeroParallax>
       </Section>
 
       {/* Bento Grid / Stats Section */}
       <Section variant="default" className="pt-32">
-        <div className="mx-auto max-w-3xl text-center mb-16">
+        <Reveal className="mx-auto max-w-3xl text-center mb-16">
+          <p className="text-sm font-semibold uppercase tracking-wider font-mono text-brand mb-3">From a git push to a verified score</p>
           <h2 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-            Trusted by engineering teams <br/> to build <span className="text-brand">smarter</span>
+            Three steps. <span className="text-brand">Nothing self-reported.</span>
           </h2>
-        </div>
-        
-        <div className="grid gap-6 md:grid-cols-3 mx-auto max-w-6xl">
+        </Reveal>
+
+        <RevealGroup className="grid gap-6 md:grid-cols-3 mx-auto max-w-6xl">
           {STEPS.map((step, i) => (
-            <Card key={step.title} className={i === 0 ? "bg-slate-50 md:row-span-2 flex flex-col justify-between border-slate-200" : "bg-white border-slate-200"}>
-               <div>
-                  <h3 className="text-5xl font-bold mb-2 text-slate-900">{step.metric}</h3>
+            <RevealItem key={step.title}>
+              <Card className={i === 0 ? "bg-slate-50 md:row-span-2 flex h-full flex-col justify-between border-slate-200" : "h-full bg-white border-slate-200"}>
+                <div>
+                  <h3 className="text-4xl font-bold mb-2 text-slate-900">{step.metric}</h3>
                   <p className="text-xs font-bold uppercase tracking-wider font-monor text-brand mb-10">{step.metricLabel}</p>
-               </div>
-               <div>
+                </div>
+                <div>
                   <h4 className="text-xl font-bold text-slate-900">{step.title}</h4>
                   <p className="mt-3 text-sm leading-relaxed text-slate-600">{step.body}</p>
-               </div>
-            </Card>
+                </div>
+              </Card>
+            </RevealItem>
           ))}
-        </div>
+        </RevealGroup>
       </Section>
 
       {/* Features Section */}
       <Section variant="default">
-        <div className="mx-auto max-w-3xl text-center mb-16">
+        <Reveal className="mx-auto max-w-3xl text-center mb-16">
           <p className="text-sm font-semibold uppercase tracking-wider font-mono text-brand mb-3">Core Features</p>
           <h2 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">Where human insight meets intelligent technology</h2>
-        </div>
-        
-        <div className="grid gap-8 md:grid-cols-2 mx-auto max-w-6xl">
+        </Reveal>
+
+        <RevealGroup className="grid gap-8 md:grid-cols-2 mx-auto max-w-6xl">
           {FEATURES.map((f) => (
-            <MagicCard key={f.title} className="p-0 flex flex-col h-full bg-slate-50 border-none shadow-sm">
-              <div className="p-8 pb-0">
-                <h3 className="text-2xl font-bold text-slate-900 mb-3">{f.title}</h3>
-                <p className="text-slate-600 leading-relaxed">{f.body}</p>
-              </div>
-              <div className="mt-8 flex-1 p-6 relative overflow-hidden flex items-end justify-center min-h-[250px]">
-                 <div className="w-[110%] bg-white rounded-t-2xl shadow-xl border border-slate-200 relative translate-y-4 p-6 grid gap-4 transition-transform hover:-translate-y-2 z-20">
-                    <div className="h-6 w-1/3 bg-slate-100 rounded-lg"></div>
-                    <div className="h-4 w-2/3 bg-slate-100 rounded-lg"></div>
-                    <div className="flex gap-3 mt-4">
-                       <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-700">✓</div>
-                       <div className="h-10 flex-1 rounded-lg bg-slate-50"></div>
-                    </div>
-                 </div>
-              </div>
-            </MagicCard>
+            <RevealItem key={f.title}>
+              <MagicCard className="p-0 flex h-full flex-col bg-slate-50 border-none shadow-sm">
+                <div className="p-8 pb-0">
+                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent-neon)]/15 text-[#3f6212]">
+                    <f.icon className="h-5 w-5" strokeWidth={2} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-900 mb-3">{f.title}</h3>
+                  <p className="text-slate-600 leading-relaxed">{f.body}</p>
+                </div>
+                <div className="mt-8 flex-1 p-6 relative overflow-hidden flex items-end justify-center min-h-[220px]">
+                   <div className="w-[110%] bg-white rounded-t-2xl shadow-xl border border-slate-200 relative translate-y-4 p-6 grid gap-3 font-mono text-xs transition-transform hover:-translate-y-2 z-20">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 uppercase tracking-wider">{f.mock.label}</span>
+                        <span className="rounded-full bg-[var(--accent-neon)]/15 px-2 py-0.5 font-bold text-[#3f6212]">{f.mock.value}</span>
+                      </div>
+                      <div className="flex items-start gap-2 text-slate-600">
+                        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--accent-neon-hover)]" />
+                        <span>{f.mock.note}</span>
+                      </div>
+                   </div>
+                </div>
+              </MagicCard>
+            </RevealItem>
           ))}
-        </div>
+        </RevealGroup>
       </Section>
 
       {/* Differentiation Pillars */}
       <Section variant="default" className="pt-32 bg-slate-50">
-        <div className="mx-auto max-w-3xl text-center mb-16">
+        <Reveal className="mx-auto max-w-3xl text-center mb-16">
           <p className="text-sm font-semibold uppercase tracking-wider font-mono text-brand mb-3">Why VeriSprint?</p>
           <h2 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
             Unlike legacy engineering intelligence tools, we verify the <span className="text-brand">truth</span>.
@@ -194,31 +249,36 @@ export default function HomePage() {
           <p className="mt-6 text-lg text-slate-600 leading-relaxed">
             Legacy tools aggregate Git metrics into executive dashboards to track velocity. We actually read the diffs to tell you if the feature is functionally finished.
           </p>
-        </div>
+        </Reveal>
 
-        <div className="grid gap-6 md:grid-cols-2 mx-auto max-w-5xl">
+        <RevealGroup className="grid gap-6 md:grid-cols-2 mx-auto max-w-5xl">
           {PILLARS.map((pillar) => (
-            <MagicCard key={pillar.title} className="flex flex-col border-slate-200">
-              <div className="flex flex-col h-full">
-                <h4 className="text-xl font-bold text-slate-900 mb-2">{pillar.title}</h4>
-                <p className="text-slate-600 leading-relaxed flex-1">{pillar.body}</p>
-              </div>
-            </MagicCard>
+            <RevealItem key={pillar.title}>
+              <MagicCard className="flex h-full flex-col border-slate-200">
+                <div className="flex h-full flex-col">
+                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-brand">
+                    <pillar.icon className="h-5 w-5" strokeWidth={2} />
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-900 mb-2">{pillar.title}</h4>
+                  <p className="text-slate-600 leading-relaxed flex-1">{pillar.body}</p>
+                </div>
+              </MagicCard>
+            </RevealItem>
           ))}
-        </div>
+        </RevealGroup>
       </Section>
 
       {/* Comparison Matrix Section */}
       <Section variant="default" className="py-24 border-b border-slate-200 relative overflow-hidden bg-white">
-        <div className="mx-auto max-w-4xl text-center mb-16 relative z-10">
+        <Reveal className="mx-auto max-w-4xl text-center mb-16 relative z-10">
           <p className="text-sm font-semibold uppercase tracking-wider font-mono text-brand mb-3">Feature Parity</p>
           <h2 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">Everything you need, <br/> none of the fragmentation.</h2>
           <p className="mt-6 text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto">
             VeriSprint doesn&apos;t just verify your work. It provides full competitive feature parity with the legacy category, so you don&apos;t need to run five different tools.
           </p>
-        </div>
+        </Reveal>
 
-        <div className="mx-auto max-w-6xl overflow-x-auto relative z-10">
+        <Reveal className="mx-auto max-w-6xl overflow-x-auto relative z-10">
           <table className="w-full text-left border-collapse border border-slate-200 rounded-xl overflow-hidden shadow-[0_0_50px_rgba(0,22,102,0.1)]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
@@ -236,72 +296,110 @@ export default function HomePage() {
                 <tr key={i} className="hover:bg-slate-50 transition-colors">
                   <td className="py-4 px-6 text-sm text-slate-700">{row.feature}</td>
                   <td className="py-4 px-6 text-center border-x border-[var(--accent-neon)]/30 bg-[var(--accent-neon)]/5 text-slate-900">
-                    {row.vs ? "✓" : <span className="text-slate-300">-</span>}
+                    {row.vs ? <Check className="mx-auto h-4 w-4 text-[#3f6212]" /> : <Minus className="mx-auto h-4 w-4 text-slate-300" />}
                   </td>
-                  <td className="py-4 px-4 text-center text-slate-400">{row.jelly ? "✓" : "-"}</td>
-                  <td className="py-4 px-4 text-center text-slate-400">{row.linear ? "✓" : "-"}</td>
-                  <td className="py-4 px-4 text-center text-slate-400">{row.gitclear ? "✓" : "-"}</td>
-                  <td className="py-4 px-4 text-center text-slate-400">{row.swarmia ? "✓" : "-"}</td>
-                  <td className="py-4 px-4 text-center text-slate-400">{row.allstacks ? "✓" : "-"}</td>
+                  <td className="py-4 px-4 text-center text-slate-400">{row.jelly ? <Check className="mx-auto h-4 w-4" /> : <Minus className="mx-auto h-4 w-4" />}</td>
+                  <td className="py-4 px-4 text-center text-slate-400">{row.linear ? <Check className="mx-auto h-4 w-4" /> : <Minus className="mx-auto h-4 w-4" />}</td>
+                  <td className="py-4 px-4 text-center text-slate-400">{row.gitclear ? <Check className="mx-auto h-4 w-4" /> : <Minus className="mx-auto h-4 w-4" />}</td>
+                  <td className="py-4 px-4 text-center text-slate-400">{row.swarmia ? <Check className="mx-auto h-4 w-4" /> : <Minus className="mx-auto h-4 w-4" />}</td>
+                  <td className="py-4 px-4 text-center text-slate-400">{row.allstacks ? <Check className="mx-auto h-4 w-4" /> : <Minus className="mx-auto h-4 w-4" />}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Reveal>
       </Section>
 
       {/* Personas Section */}
       <Section variant="default">
-        <div className="mx-auto max-w-3xl text-center mb-16">
+        <Reveal className="mx-auto max-w-3xl text-center mb-16">
           <h2 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">Built for your role</h2>
           <p className="mt-4 text-lg text-slate-600">Verification that serves the whole team, not just the VP of Engineering.</p>
-        </div>
-        <div className="grid gap-6 md:grid-cols-4 mx-auto max-w-7xl">
+        </Reveal>
+        <RevealGroup className="grid gap-6 md:grid-cols-3 lg:grid-cols-6 mx-auto max-w-7xl">
           {PERSONAS.map(p => (
-            <Card key={p.role} className="shadow-sm border-t-4 border-t-brand bg-white flex flex-col h-full">
-              <h3 className="text-lg font-bold text-slate-900 mb-3">{p.role}</h3>
-              <p className="text-sm text-slate-600 mb-6 flex-1">{p.need}</p>
-              <div className="pt-4 border-t border-slate-200 mt-auto">
-                <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Key Feature</p>
-                <p className="text-sm font-bold text-brand">{p.feature}</p>
-              </div>
-            </Card>
+            <RevealItem key={p.role}>
+              <Card className="shadow-sm border-t-4 border-t-brand bg-white flex h-full flex-col">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-brand">
+                  <p.icon className="h-5 w-5" strokeWidth={2} />
+                </div>
+                <h3 className="text-base font-bold text-slate-900 mb-2">{p.role}</h3>
+                <p className="text-xs text-slate-600 mb-6 flex-1 leading-relaxed">{p.need}</p>
+                <div className="pt-3 border-t border-slate-200 mt-auto">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Key Feature</p>
+                  <p className="text-xs font-bold text-brand">{p.feature}</p>
+                </div>
+              </Card>
+            </RevealItem>
           ))}
-        </div>
+        </RevealGroup>
       </Section>
 
-      {/* Testimonials */}
+      {/* Why evidence, not testimonials — deliberately not a fake social-proof
+          section: we're early (see /about), and a product built on "trust
+          the evidence, not the claim" shouldn't ask you to trust an
+          unverifiable quote instead. */}
       <Section variant="default" className="bg-slate-50 border-y border-slate-200">
-        <div className="mx-auto max-w-3xl text-center mb-16">
-          <p className="text-sm font-semibold uppercase tracking-wider font-mono text-brand mb-3">Testimonials</p>
-          <h2 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">Trusted by leaders</h2>
-        </div>
-        <div className="relative flex w-full max-w-6xl mx-auto flex-col items-center justify-center overflow-hidden">
-          <Marquee pauseOnHover className="[--duration:20s]">
-            {[
-              { name: "Sarah Jenkins", role: "VP of Engineering", quote: "VeriSprint completely changed how we run our sprint reviews. Instead of guessing, we just look at the evidence." },
-              { name: "Mark Twan", role: "CTO", quote: "Finally, a tool that connects what the business wants with what engineering actually does, without adding overhead." },
-              { name: "Elena Rostova", role: "Product Lead", quote: "The Confidence Score is a game changer. We don't argue about what's done anymore, we just check the score." },
-              { name: "David Chen", role: "Founder", quote: "We show our investors the VeriSprint dashboard. Real commits, real proof. No more status theater." },
-            ].map((t, i) => (
-              <div key={i} className="bg-white border border-slate-200 rounded-xl p-8 shadow-sm w-96 mx-4">
-                <div className="mb-6 h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-lg">{t.name.charAt(0)}</div>
-                <p className="text-slate-700 italic mb-8 leading-relaxed">&quot;{t.quote}&quot;</p>
-                <div>
-                  <p className="font-bold text-slate-900">{t.name}</p>
-                  <p className="text-sm text-slate-500 mt-1">{t.role}</p>
-                </div>
-              </div>
-            ))}
-          </Marquee>
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-slate-50"></div>
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-slate-50"></div>
-        </div>
+        <Reveal className="mx-auto max-w-3xl text-center">
+          <p className="text-sm font-semibold uppercase tracking-wider font-mono text-brand mb-3">Why no testimonials here</p>
+          <h2 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+            We ask you to trust the evidence, <br className="hidden sm:block" /> not our word.
+          </h2>
+          <p className="mt-6 text-lg text-slate-600 leading-relaxed">
+            VeriSprint is early — a small, independent project, not an established company with a customer roster to
+            quote. A product built around &ldquo;verify, don&apos;t just believe the claim&rdquo; would be
+            undermining its own point by asking you to take an unverifiable testimonial on faith instead. So instead
+            of a wall of quotes, here&apos;s what we&apos;d rather you check yourself:
+          </p>
+        </Reveal>
+        <Reveal delay={0.15} className="mx-auto mt-12 max-w-4xl">
+          <TrustBadgeRow
+            items={[
+              "Read-only GitHub scopes — verify in the App's own permission screen",
+              "Every score links back to its evidence — verify in your own dashboard",
+              "Free tier, no time limit, no card required — verify in 5 minutes",
+            ]}
+          />
+        </Reveal>
+      </Section>
+
+      {/* FAQ */}
+      <Section variant="default">
+        <Reveal className="mx-auto max-w-3xl text-center mb-12">
+          <p className="text-sm font-semibold uppercase tracking-wider font-mono text-brand mb-3">Questions</p>
+          <h2 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">Before you connect a repo</h2>
+        </Reveal>
+        <Reveal>
+          <FAQSection
+            items={[
+              {
+                question: "Can VeriSprint push code, merge PRs, or change repo settings?",
+                answer: "No. The GitHub App only ever requests Contents (read), Metadata (read), and Pull Requests (read). There is no write scope to request in the first place — see the Security page for the full breakdown.",
+              },
+              {
+                question: "Will this feel like surveillance to my developers?",
+                answer: "It's built specifically to avoid that: every developer sees the exact same Evidence Ledger and dashboard that gets shown about their own work — two-way transparency by default, not a manager-only view. Mismatches are always phrased as questions, never accusations.",
+              },
+              {
+                question: "Does VeriSprint train an AI model on our code?",
+                answer: "No. Diffs are sent to the configured LLM provider (Claude API by default) for that one analysis call and are not used to train any model. If your policy doesn't allow sending code to a third-party API at all, point VeriSprint at a self-hosted, OpenAI-compatible model instead — see Security.",
+              },
+              {
+                question: "What happens on the Free tier?",
+                answer: "One connected repo, the full Evidence Ledger and Confidence Score pipeline, claimed-vs-shipped reconciliation, auto-drafted standups, and the Client Proof-of-Work Portal — no time limit, no credit card. See Pricing for what each paid tier adds.",
+              },
+              {
+                question: "How is this different from Jellyfish, LinearB, GitClear, Swarmia, or Allstacks?",
+                answer: "Those tools aggregate Git metrics into dashboards that track activity and velocity. VeriSprint actually reads the diff and reasons about whether the work is functionally complete — then reconciles that against what was claimed in a ticket or standup. See the Features page for a full side-by-side.",
+              },
+            ]}
+          />
+        </Reveal>
       </Section>
 
       {/* Bottom CTA */}
       <Section variant="default" className="py-32 bg-white">
-        <div className="mx-auto max-w-4xl text-center">
+        <Reveal className="mx-auto max-w-4xl text-center">
           <h2 className="text-4xl font-extrabold text-slate-900 sm:text-6xl mb-8 leading-tight">We combine human insight <br /> with artificial intelligence</h2>
           <p className="text-xl text-slate-600 mb-12 max-w-2xl mx-auto leading-relaxed">
             Ready to see what your team actually shipped? Start your free trial today and say goodbye to status update theater.
@@ -309,7 +407,7 @@ export default function HomePage() {
           <Link href={INSTALL_URL} className="inline-block">
             <ShimmerButton background="#001666" className="text-lg px-8 py-2">Start for free</ShimmerButton>
           </Link>
-        </div>
+        </Reveal>
       </Section>
     </>
   );

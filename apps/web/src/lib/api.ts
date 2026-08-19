@@ -576,6 +576,20 @@ export const api = {
     apiFetchNoAuth<TokenPair>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => apiFetch<CurrentUser>("/auth/me"),
   logout: () => apiFetch<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+  requestPasswordReset: (email: string) =>
+    apiFetchNoAuth<{ ok: boolean; message: string }>("/auth/request-password-reset", { method: "POST", body: JSON.stringify({ email }) }),
+  resetPassword: (token: string, password: string) =>
+    apiFetchNoAuth<TokenPair>("/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) }),
+  acceptInvite: (token: string, password: string) =>
+    apiFetchNoAuth<TokenPair>("/auth/accept-invite", { method: "POST", body: JSON.stringify({ token, password }) }),
+
+  // --- Team management (Settings → Team) ---
+  listWorkspaceUsers: () => apiFetch<CurrentUser[]>("/auth/users"),
+  inviteUser: (email: string, role: string, name?: string) =>
+    apiFetch<{ ok: boolean; email: string }>("/auth/invite", { method: "POST", body: JSON.stringify({ email, role, name }) }),
+  changeUserRole: (userId: string, role: string) =>
+    apiFetch<CurrentUser>(`/auth/users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  removeUser: (userId: string) => apiFetch<{ ok: boolean }>(`/auth/users/${userId}`, { method: "DELETE" }),
 
   // --- Super-Admin Dashboard (spec Section 7) ---
   adminOverview: () => apiFetch<AdminOverview>("/admin/overview"),

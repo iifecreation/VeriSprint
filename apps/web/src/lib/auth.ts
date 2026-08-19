@@ -59,7 +59,7 @@ export function decodeAccessTokenClaims(): { role: string; workspace_id: string 
  * `null` during SSR but a real value on the client's first hydration pass —
  * a guaranteed hydration mismatch for any page that branches on it. This
  * always renders `null` on the first pass (matching the server) and fills
- * in the real claims from an effect afterward, same as TopNav's own
+ * in the real claims from an effect afterward, same as the Sidebar's own
  * login-state check. */
 export function useAccessTokenClaims(): ReturnType<typeof decodeAccessTokenClaims> {
   const [claims, setClaims] = useState<ReturnType<typeof decodeAccessTokenClaims>>(null);

@@ -1,12 +1,16 @@
 """FastAPI entrypoint — wires up all routers. Run with: uvicorn app.main:app --reload"""
 import logging
+import sys
 import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.config import get_settings
+from app.db.session import AsyncSessionLocal
 from app.observability import record_error
 from app.routers import (
     accuracy,
@@ -49,6 +53,17 @@ from app.routers import (
 )
 
 settings = get_settings()
+
+# One-line-per-record format with a timestamp — not full structured JSON, but
+# enough for any log aggregator (CloudWatch, Datadog, etc.) to parse a level
+# and message without extra config. Explicit `stream=sys.stdout` since the
+# platform default (stderr) gets treated as an error stream by some
+# container log collectors.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    stream=sys.stdout,
+)
 logger = logging.getLogger(__name__)
 
 if settings.sentry_dsn:
@@ -80,6 +95,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Only compresses responses already >500 bytes (its own default) — cheap win
+# for the larger analytics/report JSON payloads (allocation, changelog,
+# audit export) without touching small ones.
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Baseline headers every response should carry — this is a JSON API with
+    no cookie-based auth (bearer tokens only, see app/auth/), so there's no
+    CSRF surface here, but these still matter: `nosniff` and the frame/referrer
+    policy protect against this API's responses ever being misused if a
+    browser is tricked into rendering or embedding one directly."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if settings.env == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 @app.exception_handler(Exception)
@@ -138,4 +174,22 @@ app.include_router(settings_router.router)
 
 @app.get("/health")
 async def health() -> dict:
+    """Liveness only — always 200 if the process is up, no dependency
+    checks. Load balancers/uptime monitors hit this; it must never flap
+    because Postgres had a slow moment."""
     return {"status": "ok"}
+
+
+@app.get("/health/ready")
+async def readiness() -> JSONResponse:
+    """Readiness — verifies the one dependency every request actually
+    needs (Postgres). A container orchestrator should stop routing traffic
+    here on a non-200, but this is deliberately separate from `/health` so
+    a DB blip doesn't get misread as the process itself being down."""
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(text("SELECT 1"))
+        return JSONResponse(status_code=200, content={"status": "ok", "database": "ok"})
+    except Exception as exc:
+        logger.error("Readiness check failed: %s", exc)
+        return JSONResponse(status_code=503, content={"status": "unavailable", "database": "unreachable"})

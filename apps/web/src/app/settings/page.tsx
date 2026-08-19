@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Integration, type WorkspaceSSOConfig, type WorkspaceSettings } from "@/lib/api";
+import { api, type CurrentUser, type Integration, type WorkspaceSSOConfig, type WorkspaceSettings } from "@/lib/api";
 import { useAccessTokenClaims } from "@/lib/auth";
 import { Badge, Card, Input, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
 
 const KNOWN_PROVIDERS = ["linear", "jira", "pagerduty", "datadog", "opsgenie"] as const;
+const INVITABLE_ROLES = ["manager", "developer", "workspace_admin"] as const;
+const ROLE_LABEL: Record<string, string> = {
+  super_admin: "Super Admin",
+  workspace_admin: "Workspace Admin",
+  manager: "Manager",
+  developer: "Developer",
+  client: "Client",
+};
 
 /** Workspace settings: white-label branding + ROI calculator inputs. */
 export default function SettingsPage() {
@@ -71,9 +79,136 @@ export default function SettingsPage() {
         </div>
       </Card>
 
+      <TeamSection />
       <IntegrationsSection workspaceId={workspaceId} />
       <SSOConfigSection />
     </div>
+  );
+}
+
+function TeamSection() {
+  const currentUserId = useAccessTokenClaims()?.sub ?? null;
+  const [members, setMembers] = useState<CurrentUser[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<(typeof INVITABLE_ROLES)[number]>("developer");
+  const [status, setStatus] = useState<"idle" | "inviting" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [invited, setInvited] = useState<string | null>(null);
+
+  async function refresh() {
+    setMembers(await api.listWorkspaceUsers());
+    setLoaded(true);
+  }
+
+  useEffect(() => {
+    // Deferred to a microtask — see dashboard/page.tsx for why.
+    queueMicrotask(() => {
+      refresh();
+    });
+  }, []);
+
+  async function handleInvite() {
+    if (!email.trim()) return;
+    setStatus("inviting");
+    setError(null);
+    try {
+      await api.inviteUser(email.trim(), role, name.trim() || undefined);
+      setInvited(email.trim());
+      setEmail("");
+      setName("");
+      await refresh();
+      setStatus("idle");
+    } catch {
+      setError("Couldn't send that invite — check the email address, or that email sending is configured (RESEND_API_KEY).");
+      setStatus("error");
+    }
+  }
+
+  async function handleRoleChange(userId: string, newRole: string) {
+    await api.changeUserRole(userId, newRole);
+    await refresh();
+  }
+
+  async function handleRemove(userId: string) {
+    await api.removeUser(userId);
+    await refresh();
+  }
+
+  return (
+    <Card className="mt-8 space-y-5">
+      <div>
+        <h2 className="font-semibold text-slate-900">Team</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Invite teammates by email — they get a one-time link to set a password and join this workspace. GitHub
+          OAuth remains available as the primary sign-in path for anyone in your GitHub org.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[180px] flex-1">
+          <label className="block text-xs font-semibold text-slate-500">Email</label>
+          <Input className="mt-1.5 w-full" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@company.com" />
+        </div>
+        <div className="min-w-[140px]">
+          <label className="block text-xs font-semibold text-slate-500">Name (optional)</label>
+          <Input className="mt-1.5 w-full" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500">Role</label>
+          <select
+            className="mt-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+            value={role}
+            onChange={(e) => setRole(e.target.value as (typeof INVITABLE_ROLES)[number])}
+          >
+            {INVITABLE_ROLES.map((r) => (
+              <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+            ))}
+          </select>
+        </div>
+        <PrimaryButton onClick={handleInvite} disabled={!email.trim() || status === "inviting"}>
+          {status === "inviting" ? "Sending…" : "Send invite"}
+        </PrimaryButton>
+      </div>
+
+      {invited && <p className="text-sm font-medium text-emerald-600">Invite sent to {invited}.</p>}
+      {error && <p className="text-sm text-rose-600">{error}</p>}
+
+      <div className="space-y-2 border-t border-slate-200 pt-4">
+        {!loaded && <p className="text-sm text-slate-400">Loading…</p>}
+        {loaded && members.length === 0 && <p className="text-sm text-slate-400">No teammates yet — invite one above.</p>}
+        {members.map((m) => {
+          const isSelf = m.id === currentUserId;
+          return (
+            <div key={m.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-slate-800">{m.name || m.email || m.github_login || "Unnamed"}</p>
+                <p className="truncate text-xs text-slate-500">{m.email ?? m.github_login}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {isSelf ? (
+                  <Badge tone="brand">{ROLE_LABEL[m.role] ?? m.role} (you)</Badge>
+                ) : (
+                  <>
+                    <select
+                      className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                      value={m.role}
+                      onChange={(e) => handleRoleChange(m.id, e.target.value)}
+                    >
+                      {INVITABLE_ROLES.map((r) => (
+                        <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+                      ))}
+                    </select>
+                    <SecondaryButton className="px-3 py-1 text-xs" onClick={() => handleRemove(m.id)}>Remove</SecondaryButton>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 
