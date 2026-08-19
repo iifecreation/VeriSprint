@@ -47,6 +47,12 @@ class Settings(BaseSettings):
 
     # GitHub App
     github_app_id: str = Field(default="", alias="GITHUB_APP_ID")
+    # The App's URL slug (e.g. "verisprint-app") — a different value from
+    # GITHUB_APP_ID above (that's the numeric ID used to sign JWTs for the
+    # GitHub API; the slug is what actually appears in the App's public
+    # install URL, github.com/apps/<slug>/installations/new). GitHub shows
+    # the slug on the App's settings page under "Public link".
+    github_app_slug: str = Field(default="", alias="GITHUB_APP_SLUG")
     github_app_private_key: str = Field(default="", alias="GITHUB_APP_PRIVATE_KEY")
     github_webhook_secret: str = Field(default="", alias="GITHUB_WEBHOOK_SECRET")
     github_client_id: str = Field(default="", alias="GITHUB_CLIENT_ID")

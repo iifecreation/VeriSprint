@@ -3,6 +3,7 @@ import { PageHeader, Section } from "@/components/ui";
 import { CONTACT_EMAIL } from "@/lib/config";
 import { DotPattern } from "@/components/magicui/dot-pattern";
 import { MagicCard } from "@/components/magicui/magic-card";
+import { Reveal } from "@/components/Reveal";
 
 export const metadata: Metadata = { title: "About — VeriSprint" };
 
@@ -16,6 +17,7 @@ export default function AboutPage() {
         </div>
       </Section>
       <Section className="pt-0 -mt-24 z-20 relative bg-transparent">
+        <Reveal>
         <MagicCard className="mx-auto max-w-3xl flex flex-col h-full bg-white text-lg leading-relaxed text-slate-700 shadow-[0_0_50px_rgba(0,22,102,0.3)] mb-16">
           <h3 className="text-2xl font-bold text-slate-900 mb-4">The Trust Gap</h3>
           <p>
@@ -46,6 +48,7 @@ export default function AboutPage() {
             </a>
           </div>
         </MagicCard>
+        </Reveal>
       </Section>
     </>
   );

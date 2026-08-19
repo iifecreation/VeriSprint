@@ -15,7 +15,7 @@ export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Deferred to a microtask — see TopNav.tsx for why direct setState in an
+    // Deferred to a microtask — see Sidebar.tsx for why direct setState in an
     // effect body is avoided here.
     queueMicrotask(() => {
       const fragment = new URLSearchParams(window.location.hash.slice(1));

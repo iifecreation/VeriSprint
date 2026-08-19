@@ -13,6 +13,7 @@ import hmac
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -201,8 +202,16 @@ async def _handle_installation_repositories(db: AsyncSession, body: dict) -> Non
 
 
 @router.get("/install")
-async def install_redirect() -> dict:
-    """Front end links here to kick off the GitHub App install flow."""
-    return {
-        "install_url": f"https://github.com/apps/{settings.github_app_id}/installations/new"
-    }
+async def install_redirect() -> RedirectResponse:
+    """The marketing site's "Connect a repo" buttons link straight to this
+    URL as a plain `<a href>` — it has to issue a real HTTP redirect (not a
+    JSON body describing where to go) or clicking through does nothing but
+    show raw JSON instead of landing on GitHub's install screen. Uses the
+    App's URL *slug* (GITHUB_APP_SLUG), not GITHUB_APP_ID — those are two
+    different values; the numeric ID doesn't work in this URL."""
+    if not settings.github_app_slug:
+        # No app configured in this environment (local dev without a real
+        # GitHub App yet) — send people somewhere that explains why, instead
+        # of a broken/blank github.com URL with an empty app slug.
+        return RedirectResponse(f"{settings.web_base_url}/login")
+    return RedirectResponse(f"https://github.com/apps/{settings.github_app_slug}/installations/new")

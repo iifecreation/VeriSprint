@@ -6,7 +6,8 @@ const LINKS = [
   { href: "/how-it-works", label: "How it works" },
   { href: "/pricing", label: "Pricing" },
   { href: "/security", label: "Security" },
-  { href: "/docs", label: "Docs" },
+  { href: "/docs", label: "Help Center" },
+  { href: "/status", label: "Status" },
 ];
 
 export function Nav() {

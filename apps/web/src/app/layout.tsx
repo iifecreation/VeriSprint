@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ConditionalTopNav } from "@/components/ConditionalTopNav";
+import { AppShell } from "@/components/AppShell";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,9 +24,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[var(--background)] text-[var(--foreground)]">
-        <ConditionalTopNav />
-        <main className="flex-1">{children}</main>
+      <body className="min-h-full bg-[var(--background)] text-[var(--foreground)]">
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

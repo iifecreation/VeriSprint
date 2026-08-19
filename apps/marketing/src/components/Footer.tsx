@@ -9,12 +9,13 @@ const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
       { href: "/how-it-works", label: "How it works" },
       { href: "/pricing", label: "Pricing" },
       { href: "/security", label: "Security & Trust" },
+      { href: "/status", label: "Status" },
     ],
   },
   {
     title: "Resources",
     links: [
-      { href: "/docs", label: "Docs" },
+      { href: "/docs", label: "Help Center" },
       { href: "/changelog", label: "Changelog" },
     ],
   },
@@ -25,13 +26,21 @@ const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
       { href: "/contact", label: "Contact" },
     ],
   },
+  {
+    title: "Legal",
+    links: [
+      { href: "/privacy", label: "Privacy Policy" },
+      { href: "/terms", label: "Terms of Service" },
+      { href: "/dpa", label: "Data Processing Agreement" },
+    ],
+  },
 ];
 
 export function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-white text-slate-600">
       <div className="mx-auto max-w-7xl px-6 py-16">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4 lg:grid-cols-6">
           <div className="col-span-2 lg:col-span-2">
             <Link href="/" className="flex items-center gap-2 text-xl font-bold text-slate-900 tracking-tight">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-neon)] text-slate-900" aria-hidden>

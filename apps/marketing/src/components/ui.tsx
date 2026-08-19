@@ -86,3 +86,44 @@ export function SecondaryButton({ href, children, className = "" }: { href: stri
     </Link>
   );
 }
+
+/** Plain `<details>`-based accordion — no client JS needed, works in a
+ * server component, and gets free keyboard/accessibility behavior from the
+ * native element instead of reimplementing it. */
+export function FAQItem({ question, answer }: { question: string; answer: ReactNode }) {
+  return (
+    <details className="group border-b border-slate-200 py-6 [&_summary::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-lg font-semibold text-slate-900">
+        {question}
+        <span className="shrink-0 text-2xl text-slate-400 transition-transform group-open:rotate-45">+</span>
+      </summary>
+      <div className="mt-4 max-w-3xl text-base leading-relaxed text-slate-600">{answer}</div>
+    </details>
+  );
+}
+
+export function FAQSection({ items }: { items: { question: string; answer: ReactNode }[] }) {
+  return (
+    <div className="mx-auto max-w-3xl">
+      {items.map((item) => (
+        <FAQItem key={item.question} question={item.question} answer={item.answer} />
+      ))}
+    </div>
+  );
+}
+
+/** A small trust/compliance badge row — text-only, deliberately not styled
+ * as a formal certification seal, since VeriSprint doesn't hold SOC 2 etc.
+ * yet (see /security). Overstating this here would contradict that page. */
+export function TrustBadgeRow({ items }: { items: string[] }) {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm font-medium text-slate-500">
+      {items.map((item) => (
+        <span key={item} className="inline-flex items-center gap-2">
+          <CheckIcon />
+          {item}
+        </span>
+      ))}
+    </div>
+  );
+}
