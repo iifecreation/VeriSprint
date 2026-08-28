@@ -3,12 +3,13 @@ import Link from "next/link";
 import { PageHeader, Section, FAQSection } from "@/components/ui";
 import { INSTALL_URL } from "@/lib/config";
 import { DotPattern } from "@/components/magicui/dot-pattern";
+import { HeroBackground } from "@/components/HeroBackground";
 import { ShimmerButton } from "@/components/magicui/shimmer-button";
 import { Reveal, RevealGroup, RevealItem } from "@/components/Reveal";
+import { cardAccent } from "@/lib/palette";
 import {
   ShieldCheck,
   Radar,
-  GitCompareArrows,
   History,
   Sparkles,
   Activity,
@@ -34,11 +35,14 @@ import {
   FileCheck2,
   Cable,
   ServerCog,
+  Plug,
+  Wallet,
+  FileSliders,
 } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Features — VeriSprint",
-  description: "Six product areas, thirty features, every one traced back to a real commit — Evidence Ledger, Team Intelligence, Risk & Automation, Reporting, Team Health, and Enterprise.",
+  description: "Six product areas, thirty-three features, every one traced back to a real commit — Evidence Ledger, Team Intelligence, Risk & Automation, Reporting, Team Health, and Enterprise.",
 };
 
 const SPOTLIGHT = [
@@ -95,8 +99,7 @@ const PRODUCTS: Product[] = [
     features: [
       { icon: ShieldCheck, title: "Evidence Ledger", body: "Every commit and PR analyzed for tests added, TODOs, dead code, and call-graph context — a structured, inspectable evidence item, not a summary." },
       { icon: Target, title: "Confidence Score", body: "A 0–100 score per ticket, computed from its real Evidence Ledger, with the rationale always visible next to the number." },
-      { icon: GitCompareArrows, title: "Durable Change Score", body: "Distinguishes durable code progress from churn and rework, so a large diff of thrash doesn't read as more progress than a small, real fix." },
-      { icon: Activity, title: "Code Health Signals", body: "Rolls test coverage, dead code, and TODO trends into a per-repo health signal that feeds directly into the Confidence Score." },
+      { icon: Activity, title: "Code Health Signals", body: "A transparent health score built from real signal — tests added weighed against missing tests, dead code, and open TODOs — feeding directly into the Confidence Score. Our honest answer to \"durable change\" scoring: we don't claim to track line-survival across history, because we don't have that data to back it." },
       { icon: History, title: "Historical Accuracy", body: "Per person, per month: how often claimed progress actually held up against verified evidence, tracked over time." },
     ],
   },
@@ -110,6 +113,7 @@ const PRODUCTS: Product[] = [
       { icon: Sparkles, title: "AI Contribution Tracker", body: "Detects self-disclosed AI assistance in commit messages (Co-Authored-By trailers, 'Generated with' lines) — real disclosure, not a behavioral guess." },
       { icon: Landmark, title: "Investment Allocation", body: "Commits and tickets tagged and rolled up by business initiative, so leadership can see where engineering time actually went." },
       { icon: FileCheck2, title: "Cost Capitalization Report", body: "Audit-ready R&D spend, classified by real title/description keywords and commit volume — dollar figures stay hidden until you configure a rate." },
+      { icon: Wallet, title: "AI Tool Cost Tracking", body: "Log what you actually pay for Copilot, Cursor, Claude Code, and every other AI coding tool seat — normalized to a monthly figure and set next to the AI Contribution Tracker's real adoption signal, never a vendor comparison." },
       { icon: TrendingUp, title: "Delivery Forecast", body: "A statistical projection of a sprint's completion date from its own confidence-weighted velocity — a transparent trend line, not an opaque black-box model." },
       { icon: Waypoints, title: "Value Stream View", body: "Average time spent in each ticket status before moving to the next, computed only from real, tracked status transitions." },
     ],
@@ -132,9 +136,11 @@ const PRODUCTS: Product[] = [
     eyebrow: "Product 4 of 6",
     name: "Communication & Reporting",
     pitch: "The same verification engine, translated for every audience that needs to hear it: developers who'd rather not retype their day, PMs who need a sprint rollup, investors who need one paragraph.",
-    stat: { value: "6", label: "Report and digest types generated from one evidence source" },
+    stat: { value: "7", label: "Report and digest types generated from one evidence source" },
     features: [
       { icon: MessagesSquare, title: "AI Repo Chat", body: "Ask your codebase questions in Slack or the dashboard, answered with citations back to the real evidence." },
+      { icon: Plug, title: "MCP Server", body: "Connect Claude Desktop, Cursor, or any MCP-compatible client directly to your Evidence Ledger — query tickets, Confidence Scores, and Repo Chat from the AI tool you already work in, authenticated with a rotatable per-workspace token." },
+      { icon: FileSliders, title: "Report Builder", body: "Pick exactly which real sections go into a report — shipped activity, cost capitalization, AI contribution, AI tool spend — deterministically assembled from the same evidence as every other report, no LLM rewrite step." },
       { icon: ClipboardList, title: "Auto-Drafted Standups", body: "A daily summary drafted from real commits for a developer to review and post — no typing from memory required." },
       { icon: Mail, title: "Slack & Email Digests", body: "A daily or weekly rollup delivered where the team already works, sourced from the same Evidence Ledger as everything else." },
       { icon: FileClock, title: "Visual Changelog", body: "Merged PRs and commits grouped by day into a real activity timeline — not a hand-curated release-notes page." },
@@ -170,10 +176,17 @@ const PRODUCTS: Product[] = [
 export default function FeaturesPage() {
   return (
     <>
-      <Section variant="default" className="bg-slate-50 pb-16 pt-20 border-b border-slate-200 relative overflow-hidden">
-        <DotPattern className="opacity-60" />
+      <Section
+        variant="default"
+        className="bg-[var(--background)] pb-16 border-b border-[var(--line)] relative overflow-hidden"
+        background={
+          <>
+            <HeroBackground />
+            <DotPattern className="opacity-40" />
+          </>
+        }
+      >
         <PageHeader
-          eyebrow="Product"
           title="Six products. One evidence source."
           subtitle="Nothing here is a self-reported field. If VeriSprint shows you a number, it can show you the evidence behind it — five signature features below in depth, then all six product areas."
         />
@@ -189,20 +202,20 @@ export default function FeaturesPage() {
               <div className={`flex flex-col gap-10 lg:flex-row lg:items-center ${i % 2 === 1 ? "lg:flex-row-reverse" : ""}`}>
                 <div className="flex-1">
                   <p className="text-xs font-bold uppercase tracking-wider font-mono text-brand mb-3">{f.tag}</p>
-                  <h3 className="text-3xl font-bold text-slate-900 tracking-tight">{f.title}</h3>
-                  <p className="mt-4 text-base leading-relaxed text-slate-600">{f.body}</p>
+                  <h3 className="text-3xl font-bold text-[var(--foreground)] tracking-tight">{f.title}</h3>
+                  <p className="mt-4 text-base leading-relaxed text-[var(--text-muted)]">{f.body}</p>
                 </div>
                 <div className="flex-1 w-full">
-                  <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden font-mono">
-                    <div className="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center gap-2">
+                  <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-md overflow-hidden font-mono">
+                    <div className="bg-[var(--background)] border-b border-[var(--line)] px-4 py-2 flex items-center gap-2">
                       <div className="flex gap-1.5">
                         <div className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
                         <div className="h-2.5 w-2.5 rounded-full bg-yellow-400/70" />
                         <div className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
                       </div>
-                      <span className="text-xs text-slate-500 ml-2">{f.mock.label}</span>
+                      <span className="text-xs text-[var(--text-dim)] ml-2">{f.mock.label}</span>
                     </div>
-                    <div className="p-5 space-y-1.5 text-sm text-slate-600">
+                    <div className="p-5 space-y-1.5 text-sm text-[var(--text-muted)]">
                       {f.mock.lines.map((line, li) => (
                         <div key={li}>{line}</div>
                       ))}
@@ -217,11 +230,11 @@ export default function FeaturesPage() {
 
       {/* Six products */}
       <div>
-        <Section variant="default" className="pb-0 bg-slate-50 border-y border-slate-200">
+        <Section variant="default" className="pb-0 bg-[var(--background)] border-y border-[var(--line)]">
           <Reveal className="mx-auto max-w-3xl text-center">
             <p className="text-sm font-semibold uppercase tracking-wider font-mono text-brand mb-3">The full lineup</p>
-            <h2 className="text-3xl font-bold text-slate-900 tracking-tight sm:text-4xl">Six products, framed around who needs them</h2>
-            <p className="mt-4 text-slate-600 text-lg leading-relaxed">
+            <h2 className="text-3xl font-bold text-[var(--foreground)] tracking-tight sm:text-4xl">Six products, framed around who needs them</h2>
+            <p className="mt-4 text-[var(--text-muted)] text-lg leading-relaxed">
               Every feature below lives in exactly one of these — not because they&apos;re technically related, but
               because they answer the same buyer&apos;s question.
             </p>
@@ -229,34 +242,37 @@ export default function FeaturesPage() {
         </Section>
 
         {PRODUCTS.map((product, i) => (
-          <Section key={product.name} variant={i % 2 === 1 ? "sky" : "default"} className={i % 2 === 1 ? "border-y border-slate-200" : ""}>
+          <Section key={product.name} variant={i % 2 === 1 ? "sky" : "default"} className={i % 2 === 1 ? "border-y border-[var(--line)]" : ""}>
             <div className="mx-auto max-w-6xl">
               <Reveal className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-end mb-10">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider font-mono text-brand mb-3">{product.eyebrow}</p>
-                  <h3 className="text-3xl font-bold text-slate-900 tracking-tight sm:text-4xl">{product.name}</h3>
-                  <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600">{product.pitch}</p>
+                  <h3 className="text-3xl font-bold text-[var(--foreground)] tracking-tight sm:text-4xl">{product.name}</h3>
+                  <p className="mt-4 max-w-2xl text-base leading-relaxed text-[var(--text-muted)]">{product.pitch}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm lg:justify-self-end lg:w-full lg:max-w-xs">
-                  <p className="text-4xl font-bold text-slate-900">{product.stat.value}</p>
-                  <p className="mt-2 text-sm text-slate-500 leading-snug">{product.stat.label}</p>
+                <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-sm lg:justify-self-end lg:w-full lg:max-w-xs">
+                  <p className="text-4xl font-bold text-[var(--foreground)]">{product.stat.value}</p>
+                  <p className="mt-2 text-sm text-[var(--text-dim)] leading-snug">{product.stat.label}</p>
                 </div>
               </Reveal>
 
               <RevealGroup className={`grid gap-5 ${product.features.length > 4 ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2"}`}>
-                {product.features.map((item) => (
-                  <RevealItem key={item.title}>
-                    <div className="flex h-full gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-neon)]/15 text-[#3f6212]">
-                        <item.icon className="h-4.5 w-4.5" strokeWidth={2} />
+                {product.features.map((item) => {
+                  const accent = cardAccent(i);
+                  return (
+                    <RevealItem key={item.title}>
+                      <div className="flex h-full gap-4 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-sm">
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${accent.bg} ${accent.text}`}>
+                          <item.icon className="h-4.5 w-4.5" strokeWidth={2} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-[var(--foreground)]">{item.title}</h4>
+                          <p className="mt-1.5 text-sm text-[var(--text-muted)] leading-relaxed">{item.body}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-900">{item.title}</h4>
-                        <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">{item.body}</p>
-                      </div>
-                    </div>
-                  </RevealItem>
-                ))}
+                    </RevealItem>
+                  );
+                })}
               </RevealGroup>
             </div>
           </Section>
@@ -267,7 +283,7 @@ export default function FeaturesPage() {
       <Section variant="default">
         <Reveal className="mx-auto max-w-3xl text-center mb-12">
           <p className="text-sm font-semibold uppercase tracking-wider font-mono text-brand mb-3">Common questions</p>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight sm:text-4xl">About the feature set</h2>
+          <h2 className="text-3xl font-bold text-[var(--foreground)] tracking-tight sm:text-4xl">About the feature set</h2>
         </Reveal>
         <Reveal>
           <FAQSection
@@ -293,15 +309,15 @@ export default function FeaturesPage() {
         </Reveal>
       </Section>
 
-      <Section variant="default" className="bg-slate-50 border-t border-slate-200">
+      <Section variant="default" className="bg-[var(--background)] border-t border-[var(--line)]">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">See it against your own commits</h2>
-          <p className="mt-4 text-slate-600 text-lg">Connect a repo — the Free tier has no time limit and no credit card.</p>
+          <h2 className="text-3xl font-bold text-[var(--foreground)] tracking-tight">See it against your own commits</h2>
+          <p className="mt-4 text-[var(--text-muted)] text-lg">Connect a repo — the Free tier has no time limit and no credit card.</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Link href={INSTALL_URL} className="inline-block">
-              <ShimmerButton background="#001666" className="text-lg px-8 py-2">Connect a GitHub repo</ShimmerButton>
+              <ShimmerButton background="#4fb8c4" className="text-lg px-8 py-2">Connect a GitHub repo</ShimmerButton>
             </Link>
-            <Link href="/docs" className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
+            <Link href="/docs" className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--foreground)] transition-colors">
               Not sure where to start? See the Help Center →
             </Link>
           </div>

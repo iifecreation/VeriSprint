@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader, Section, Card } from "@/components/ui";
 import { API_BASE_URL, CONTACT_EMAIL } from "@/lib/config";
+import { HeroBackground } from "@/components/HeroBackground";
 
 type CheckState = "checking" | "up" | "down";
 
@@ -18,12 +19,12 @@ const INITIAL_CHECKS: Check[] = [
 ];
 
 function Dot({ state }: { state: CheckState }) {
-  const color = state === "up" ? "bg-emerald-500" : state === "down" ? "bg-rose-500" : "bg-slate-300 animate-pulse";
+  const color = state === "up" ? "bg-emerald-500" : state === "down" ? "bg-rose-500" : "bg-[var(--text-dim)] animate-pulse";
   return <span className={`inline-block h-2.5 w-2.5 rounded-full ${color}`} aria-hidden />;
 }
 
 function Label({ state }: { state: CheckState }) {
-  if (state === "checking") return <span className="text-slate-400">Checking…</span>;
+  if (state === "checking") return <span className="text-[var(--text-dim)]">Checking…</span>;
   if (state === "up") return <span className="text-emerald-600 font-semibold">Operational</span>;
   return <span className="text-rose-600 font-semibold">Unavailable</span>;
 }
@@ -67,23 +68,26 @@ export default function StatusPage() {
 
   return (
     <>
-      <Section variant="default" className="bg-slate-50 pb-16 pt-20 border-b border-slate-200">
+      <Section
+        variant="default"
+        className="bg-[var(--background)] pb-16 border-b border-[var(--line)] relative overflow-hidden"
+        background={<HeroBackground />}
+      >
         <PageHeader
-          eyebrow="Status"
           title="System status"
           subtitle="Live checks against the same endpoints our own infrastructure monitors — not a manually-updated claim."
         />
       </Section>
       <Section>
         <div className="mx-auto max-w-2xl">
-          <Card className={`mb-8 flex items-center gap-4 ${allUp ? "border-emerald-200 bg-emerald-50" : anyChecking ? "" : "border-rose-200 bg-rose-50"}`}>
+          <Card className={`mb-8 flex items-center gap-4 ${allUp ? "border-emerald-500/30 bg-emerald-500/15" : anyChecking ? "" : "border-rose-500/30 bg-rose-500/15"}`}>
             <Dot state={anyChecking ? "checking" : allUp ? "up" : "down"} />
             <div>
-              <p className="font-bold text-slate-900">
+              <p className="font-bold text-[var(--foreground)]">
                 {anyChecking ? "Checking system status…" : allUp ? "All systems operational" : "Some systems are experiencing issues"}
               </p>
               {lastChecked && (
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-[var(--text-dim)] mt-1">
                   Last checked {lastChecked.toLocaleTimeString()} · rechecks automatically every 30s
                 </p>
               )}
@@ -94,8 +98,8 @@ export default function StatusPage() {
             {checks.map((check) => (
               <Card key={check.name} className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="font-semibold text-slate-900">{check.name}</p>
-                  <p className="mt-1 text-sm text-slate-500">{check.description}</p>
+                  <p className="font-semibold text-[var(--foreground)]">{check.name}</p>
+                  <p className="mt-1 text-sm text-[var(--text-dim)]">{check.description}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Dot state={check.state} />
@@ -105,7 +109,7 @@ export default function StatusPage() {
             ))}
           </div>
 
-          <p className="mt-10 text-center text-sm text-slate-500">
+          <p className="mt-10 text-center text-sm text-[var(--text-dim)]">
             This page checks the API directly from your browser — if your network blocks outbound requests to our
             API host, it may show unavailable even when the service is up. Persistent issues:{" "}
             <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand underline">

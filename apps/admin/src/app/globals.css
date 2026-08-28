@@ -1,24 +1,31 @@
 @import "tailwindcss";
 
 /*
- * Same brand tokens as apps/marketing (neon-lime accent, glass cards) but a
- * dark "control room" base — this is the operator-only, cross-tenant
- * surface, and a dark theme reinforces that distinction from the product
- * app while staying on-brand rather than introducing a new palette.
+ * Full dark theme, one 3-color system shared with apps/web and
+ * apps/marketing: #0c1615 (page background), #16302f (card/surface/panel),
+ * #4fb8c4 (accent). Everything else is derived from those three; the only
+ * exceptions are semantic status colors (success/danger/warning), which
+ * stay their conventional green/rose/amber regardless of theme.
  */
 :root {
-  --background: #020617;
-  --foreground: #f1f5f9;
+  --background: #0c1615;
+  --foreground: #eef4f3;
 
-  --accent-neon: #a3e635;
-  --accent-neon-hover: #84cc16;
-  --card-glass-bg: rgba(255, 255, 255, 0.04);
-  --card-glass-border: rgba(255, 255, 255, 0.08);
+  --text-muted: #8ba39f;
+  --text-dim: #6b8783;
+  --line: #24403d;
+  --line-strong: #2f4d49;
 
-  --panel-bg: #0f172a;
+  --accent-neon: #4fb8c4;
+  --accent-neon-hover: #74c9d3;
+  --card-glass-bg: rgba(22, 48, 47, 0.6);
+  --card-glass-border: rgba(79, 184, 196, 0.14);
+
+  --panel-bg: #16302f;
 }
 
 @theme inline {
+  --color-brand: #4fb8c4;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-accent: var(--accent-neon);
@@ -40,16 +47,16 @@ body {
 }
 
 .glass-nav {
-  background: rgba(2, 6, 23, 0.85);
+  background: rgba(12, 22, 21, 0.88);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--line);
 }
 
 @keyframes pulse-glow {
-  0% { box-shadow: 0 0 0 0 rgba(163, 230, 53, 0.4); }
-  70% { box-shadow: 0 0 0 8px rgba(163, 230, 53, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(163, 230, 53, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(79, 184, 196, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(79, 184, 196, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(79, 184, 196, 0); }
 }
 .animate-pulse-glow {
   animation: pulse-glow 2s infinite;

@@ -1,54 +1,77 @@
 import type { Metadata } from "next";
 import { PageHeader, Section } from "@/components/ui";
-import { CONTACT_EMAIL, INSTALL_URL } from "@/lib/config";
-import Link from "next/link";
+import { CONTACT_EMAIL } from "@/lib/config";
 import { DotPattern } from "@/components/magicui/dot-pattern";
 import { MagicCard } from "@/components/magicui/magic-card";
-import { ShimmerButton } from "@/components/magicui/shimmer-button";
+import { Reveal, RevealGroup, RevealItem } from "@/components/Reveal";
+import { HeroBackground } from "@/components/HeroBackground";
+import { ContactForm } from "@/components/ContactForm";
+import { cardAccent } from "@/lib/palette";
+import { Building2, ShieldQuestion, FlagTriangleRight, MessageCircleQuestion } from "lucide-react";
 
 export const metadata: Metadata = { title: "Contact — VeriSprint" };
 
 const REASONS = [
-  { title: "Enterprise & Agency plans", body: "SSO, on-prem LLM, white-labeled Client Portal, or a dedicated setup call." },
-  { title: "Security questions", body: "Anything about how VeriSprint handles your code, scopes, or workspace isolation." },
-  { title: "Something looks wrong", body: "A page claiming a capability that doesn't actually work as described — please tell us." },
-  { title: "Anything else", body: "General questions, feedback, or partnership inquiries." },
+  { icon: Building2, title: "Enterprise & Agency plans", body: "SSO, on-prem LLM, white-labeled Client Portal, or a dedicated setup call." },
+  { icon: ShieldQuestion, title: "Security questions", body: "Anything about how VeriSprint handles your code, scopes, or workspace isolation." },
+  { icon: FlagTriangleRight, title: "Something looks wrong", body: "A page claiming a capability that doesn't actually work as described — please tell us." },
+  { icon: MessageCircleQuestion, title: "Anything else", body: "General questions, feedback, or partnership inquiries." },
 ];
 
 export default function ContactPage() {
   return (
     <>
-      <Section variant="default" className="bg-slate-50 pb-16 pt-20 border-b border-slate-200 relative overflow-hidden">
-        <DotPattern className="opacity-60" />
+      <Section
+        variant="default"
+        className="bg-[var(--background)] pb-16 border-b border-[var(--line)] relative overflow-hidden"
+        background={
+          <>
+            <HeroBackground />
+            <DotPattern className="opacity-40" />
+          </>
+        }
+      >
         <PageHeader
-          eyebrow="Contact"
           title="Talk to us"
-          subtitle="We're a small team — email goes directly to the people building this, not a ticket queue."
+          subtitle="We're a small team — every message below lands directly with the people building this, not a ticket queue."
         />
       </Section>
       <Section>
         <div className="mx-auto max-w-4xl">
-          <div className="grid gap-6 md:grid-cols-2">
-            {REASONS.map((r) => (
-              <MagicCard key={r.title} className="flex-col h-full bg-white shadow-sm border-slate-200">
-                <h3 className="text-xl font-bold text-slate-900 mb-2">{r.title}</h3>
-                <p className="text-sm text-slate-600 leading-relaxed">{r.body}</p>
-              </MagicCard>
-            ))}
-          </div>
-          <MagicCard className="mt-12 bg-white text-slate-900 border-slate-200 text-center shadow-[0_0_50px_rgba(0,22,102,0.3)] relative overflow-hidden flex flex-col items-center">
-            
-            <p className="text-sm font-semibold text-slate-400 uppercase tracking-wider font-mono">Email us directly</p>
-            <a href={`mailto:${CONTACT_EMAIL}`} className="mt-3 block text-3xl font-bold text-brand hover:text-blue-600 transition-colors relative z-10">
-              {CONTACT_EMAIL}
-            </a>
-            <div className="mt-12 pt-8 border-t border-slate-200 w-full flex flex-col items-center">
-               <p className="text-sm text-slate-400 mb-6">Or skip the email and just try it:</p>
-               <Link href={INSTALL_URL} className="inline-block">
-                 <ShimmerButton background="#001666" className="text-lg px-8 py-2">Connect a GitHub repo</ShimmerButton>
-               </Link>
-            </div>
-          </MagicCard>
+          <RevealGroup className="grid gap-6 md:grid-cols-2">
+            {REASONS.map((r, i) => {
+              const accent = cardAccent(i);
+              return (
+                <RevealItem key={r.title}>
+                  <MagicCard className="flex h-full flex-col bg-[var(--surface)] shadow-sm border-[var(--line)]">
+                    <div className={`mb-4 flex h-10 w-10 items-center justify-center rounded-lg ${accent.bg} ${accent.text}`}>
+                      <r.icon className="h-5 w-5" strokeWidth={2} />
+                    </div>
+                    <h3 className="text-xl font-bold text-[var(--foreground)] mb-2">{r.title}</h3>
+                    <p className="text-sm text-[var(--text-muted)] leading-relaxed">{r.body}</p>
+                  </MagicCard>
+                </RevealItem>
+              );
+            })}
+          </RevealGroup>
+
+          <Reveal delay={0.15}>
+            <MagicCard className="mt-12 bg-[var(--surface)] text-[var(--foreground)] border-[var(--line)] shadow-[0_0_50px_rgba(79,184,196,0.3)] relative overflow-hidden">
+              <p className="text-center text-sm font-semibold text-[var(--text-dim)] uppercase tracking-wider font-mono">Send us a message</p>
+              <div className="mx-auto mt-6 max-w-lg">
+                <ContactForm />
+              </div>
+              <div className="mx-auto mt-10 max-w-lg border-t border-[var(--line)] pt-6 text-center">
+                <p className="text-sm text-[var(--text-dim)]">
+                  Prefer email? Write to us directly at{" "}
+                  <a href={`mailto:${CONTACT_EMAIL}`} className="font-semibold text-brand hover:text-brand transition-colors">
+                    {CONTACT_EMAIL}
+                  </a>
+                  .
+                </p>
+              </div>
+            </MagicCard>
+          </Reveal>
         </div>
       </Section>
     </>

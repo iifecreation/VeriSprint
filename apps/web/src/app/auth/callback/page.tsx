@@ -46,7 +46,7 @@ export default function AuthCallbackPage() {
   }
 
   return (
-    <div className="flex min-h-[70vh] items-center justify-center gap-2 text-sm text-slate-400">
+    <div className="flex min-h-[70vh] items-center justify-center gap-2 text-sm text-[var(--text-dim)]">
       <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-[var(--accent-neon)]" />
       Signing you in…
     </div>

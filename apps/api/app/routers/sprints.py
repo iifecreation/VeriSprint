@@ -15,8 +15,9 @@ from app.auth.dependencies import ensure_workspace_access, get_internal_user, ge
 from app.db.models import ConfidenceScore, Repo, Sprint, Ticket, User
 from app.db.session import get_db
 from app.schemas import BurndownOut, BurndownPoint, SprintCreate, SprintOut
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/sprints", tags=["sprints"])
+router = APIRouter(prefix="/sprints", tags=["sprints"], dependencies=[Depends(require_active_access)])
 
 
 async def _sprint_for_user(

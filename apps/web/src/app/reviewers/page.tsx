@@ -59,7 +59,7 @@ export default function ReviewersPage() {
 
       {enabled === false && (
         <Card className="mt-8">
-          <p className="text-sm text-slate-500">Not enabled for your workspace — a Super Admin can turn this on from the Operator Console.</p>
+          <p className="text-sm text-[var(--text-dim)]">Not enabled for your workspace — a Super Admin can turn this on from the Operator Console.</p>
         </Card>
       )}
 
@@ -67,12 +67,12 @@ export default function ReviewersPage() {
         <>
           <Card className="mt-8 flex flex-wrap items-end gap-4">
             <div className="min-w-[280px] flex-1">
-              <label className="block text-xs font-semibold text-slate-500">Pull request</label>
+              <label className="block text-xs font-semibold text-[var(--text-dim)]">Pull request</label>
               {prs.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-400">{repoId ? "No pull requests ingested yet for this repo." : "Pick a repo above."}</p>
+                <p className="mt-2 text-sm text-[var(--text-dim)]">{repoId ? "No pull requests ingested yet for this repo." : "Pick a repo above."}</p>
               ) : (
                 <select
-                  className="mt-1.5 w-full rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900"
+                  className="mt-1.5 w-full rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--foreground)]"
                   value={selectedPrId ?? ""}
                   onChange={(e) => {
                     setSelectedPrId(e.target.value);
@@ -95,7 +95,7 @@ export default function ReviewersPage() {
           {status === "error" && <p className="mt-3 text-sm text-rose-600">Couldn&apos;t reach the API to suggest reviewers.</p>}
 
           {selectedPr && (
-            <p className="mt-4 text-xs text-slate-400">
+            <p className="mt-4 text-xs text-[var(--text-dim)]">
               @{selectedPr.author_github_login} opened #{selectedPr.number} on {new Date(selectedPr.opened_at).toLocaleDateString()}
               {selectedPr.linked_ticket_key && <> · linked to {selectedPr.linked_ticket_key}</>}
             </p>
@@ -104,10 +104,10 @@ export default function ReviewersPage() {
           {result && (
             <div className="mt-6 space-y-4">
               <Card>
-                <h2 className="text-sm font-semibold text-slate-900">Top suggested reviewers</h2>
+                <h2 className="text-sm font-semibold text-[var(--foreground)]">Top suggested reviewers</h2>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {result.top_suggested_reviewers.length === 0 ? (
-                    <p className="text-sm text-slate-400">No history found for this PR&apos;s files — no reviewer has touched them before.</p>
+                    <p className="text-sm text-[var(--text-dim)]">No history found for this PR&apos;s files — no reviewer has touched them before.</p>
                   ) : (
                     result.top_suggested_reviewers.map((r) => (
                       <Badge key={r} tone="brand">
@@ -120,15 +120,15 @@ export default function ReviewersPage() {
 
               {result.suggestions.length > 0 && (
                 <Card>
-                  <h2 className="text-sm font-semibold text-slate-900">By file</h2>
+                  <h2 className="text-sm font-semibold text-[var(--foreground)]">By file</h2>
                   <ul className="mt-3 space-y-3">
                     {result.suggestions.map((s) => (
-                      <li key={s.file_path} className="rounded-xl bg-slate-50 p-3 text-sm">
-                        <p className="font-mono text-xs text-slate-500">{s.file_path}</p>
-                        <p className="mt-1 text-slate-700">
+                      <li key={s.file_path} className="rounded-xl bg-[var(--background)] p-3 text-sm">
+                        <p className="font-mono text-xs text-[var(--text-dim)]">{s.file_path}</p>
+                        <p className="mt-1 text-[var(--text-muted)]">
                           {s.suggested_reviewers.map((r) => `@${r}`).join(", ")}
                         </p>
-                        <p className="mt-1 text-xs text-slate-400">{s.basis}</p>
+                        <p className="mt-1 text-xs text-[var(--text-dim)]">{s.basis}</p>
                       </li>
                     ))}
                   </ul>

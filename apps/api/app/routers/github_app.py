@@ -11,6 +11,7 @@ one tenant per installed account/org.
 import hashlib
 import hmac
 import json
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -76,6 +77,7 @@ async def _handle_installation_created(db: AsyncSession, body: dict) -> None:
         name=account_login,
         github_installation_id=installation["id"],
         account_login=account_login,
+        trial_ends_at=datetime.now(timezone.utc) + timedelta(days=settings.trial_days),
     )
     db.add(workspace)
     await db.flush()  # populate workspace.id (client-side uuid4 default) for the FK below
@@ -103,10 +105,34 @@ async def _handle_installation_created(db: AsyncSession, body: dict) -> None:
         await db.flush()
         workspace.installed_by_user_id = installer.id
 
+    # The `installation.created` payload includes the repo list directly
+    # when `repository_selection` is "selected" (verified live: GitHub does
+    # NOT reliably follow up with a separate `installation_repositories`
+    # event in this case — only `_handle_installation_repositories` below
+    # handles that event, for when repos are added/removed *after* install).
+    # An "all repositories" installation has no `repositories` key here at
+    # all; those repos are only visible via the installation access token,
+    # not the webhook — out of scope until Repos are actually connected
+    # through the dashboard's own repo picker.
+    repositories = body.get("repositories") or []
+    if repositories:
+        existing_ids = {
+            gh_id for (gh_id,) in (
+                await db.execute(select(Repo.github_repo_id).where(Repo.workspace_id == workspace.id))
+            ).all()
+        }
+        for repo in repositories:
+            if repo["id"] in existing_ids:
+                continue
+            db.add(Repo(workspace_id=workspace.id, github_repo_id=repo["id"], full_name=repo["full_name"]))
+
     await record_audit(
         db, actor=sender.get("login", "github-webhook"), workspace_id=workspace.id,
         action="integration.github_app_connected", entity_type="workspace", entity_id=str(workspace.id),
-        after={"account_login": account_login, "github_installation_id": installation["id"]},
+        after={
+            "account_login": account_login, "github_installation_id": installation["id"],
+            "repositories": [r["full_name"] for r in repositories],
+        },
     )
     await db.commit()
 

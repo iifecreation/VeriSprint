@@ -18,8 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import ClientPortalLink, Repo, ReportDocument, Workspace
 from app.db.session import get_db
 from app.schemas import PortalBranding, PublicPortalReportOut
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/portal", tags=["client-portal"])
+router = APIRouter(prefix="/portal", tags=["client-portal"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("/{token}", response_model=PublicPortalReportOut)

@@ -78,6 +78,21 @@ class Settings(BaseSettings):
 
     # Email digests
     resend_api_key: str = Field(default="", alias="RESEND_API_KEY")
+    # Where the marketing site's Contact form notifies on a new submission —
+    # the message itself is always saved regardless (see routers/contact.py),
+    # this only controls the best-effort email on top of that.
+    contact_notify_email: str = Field(default="hello@verisprint.dev", alias="CONTACT_NOTIFY_EMAIL")
+    # Where a real production error (ErrorEvent severity error/critical)
+    # emails the operator — see app/observability.py::record_error. Falls
+    # back to contact_notify_email so this works out of the box without a
+    # second address to configure, but can point somewhere different (e.g.
+    # an on-call inbox) once one exists.
+    operator_alert_email: str = Field(default="", alias="OPERATOR_ALERT_EMAIL")
+
+    # How long a brand-new workspace can use core features before it needs a
+    # paid plan — see app/billing_access.py. A config value rather than a
+    # hardcoded constant so it can be tuned without a redeploy.
+    trial_days: int = Field(default=2, alias="TRIAL_DAYS")
 
     # Ticket sync (optional for MVP demo; manual entry works without it)
     jira_api_token: str = Field(default="", alias="JIRA_API_TOKEN")
@@ -122,6 +137,15 @@ class Settings(BaseSettings):
     stripe_price_id_team: str = Field(default="", alias="STRIPE_PRICE_ID_TEAM")
     stripe_price_id_growth: str = Field(default="", alias="STRIPE_PRICE_ID_GROWTH")
     stripe_price_id_agency: str = Field(default="", alias="STRIPE_PRICE_ID_AGENCY")
+
+    # Paystack — second billing processor (spec: multi-provider billing).
+    # Stripe can't pay out to a business based in most African countries;
+    # Paystack (itself a Stripe subsidiary) exists for exactly that gap.
+    # Unlike the Stripe price IDs above, Paystack plan codes are never
+    # hand-configured here — they live on PricingPlan.paystack_plan_code,
+    # auto-created/rotated by app/routers/pricing.py.
+    paystack_secret_key: str = Field(default="", alias="PAYSTACK_SECRET_KEY")
+    paystack_public_key: str = Field(default="", alias="PAYSTACK_PUBLIC_KEY")
 
 
 @lru_cache

@@ -12,8 +12,9 @@ from app.db.models import ChatQuery, Repo, User
 from app.db.session import get_db
 from app.integrations.llm_client import answer_repo_chat_question
 from app.schemas import ChatQueryOut, RepoChatAnswer, RepoChatQuery
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/chat", tags=["chat"], dependencies=[Depends(require_active_access)])
 
 
 @router.post("", response_model=RepoChatAnswer)

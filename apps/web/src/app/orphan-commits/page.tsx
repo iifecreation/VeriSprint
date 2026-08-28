@@ -63,9 +63,9 @@ export default function OrphanCommitsPage() {
           <Card key={c.id}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-mono text-xs text-slate-500">{c.sha.slice(0, 7)}</p>
-                <p className="mt-1 text-sm text-slate-900">{c.message.split("\n")[0]}</p>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <p className="font-mono text-xs text-[var(--text-dim)]">{c.sha.slice(0, 7)}</p>
+                <p className="mt-1 text-sm text-[var(--foreground)]">{c.message.split("\n")[0]}</p>
+                <p className="mt-0.5 text-xs text-[var(--text-dim)]">
                   @{c.author_github_login} · {new Date(c.committed_at).toLocaleDateString()} · {c.files_changed} file(s)
                 </p>
               </div>
@@ -78,7 +78,7 @@ export default function OrphanCommitsPage() {
                 />
                 <button
                   onClick={() => handleLink(c.id)}
-                  className="rounded-full bg-slate-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-800"
+                  className="rounded-full bg-[var(--accent-neon)] px-4 py-2 text-xs font-bold text-[#04201f] transition-colors hover:bg-[var(--accent-neon-hover)]"
                 >
                   Link
                 </button>

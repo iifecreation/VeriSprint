@@ -13,8 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import get_repo_for_user
 from app.db.models import ConfidenceScore, ReconciliationFlag, Repo, Ticket
 from app.db.session import get_db
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("/summary")

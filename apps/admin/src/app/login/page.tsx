@@ -38,22 +38,22 @@ export default function AdminLoginPage() {
   return (
     <div className="mx-auto flex min-h-[80vh] max-w-sm flex-col justify-center px-6">
       <div className="mb-8 text-center">
-        <span className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent-neon)] text-slate-900">
+        <span className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent-neon)] text-[#04201f]">
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-7 w-7">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
           </svg>
         </span>
-        <h1 className="text-2xl font-bold text-white">Operator sign-in</h1>
-        <p className="mt-1 text-sm text-slate-400">VeriSprint internal console — Super Admin accounts only.</p>
+        <h1 className="text-2xl font-bold text-[var(--foreground)]">Operator sign-in</h1>
+        <p className="mt-1 text-sm text-[var(--text-dim)]">VeriSprint internal console — Super Admin accounts only.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-400">Email</label>
+          <label className="mb-1 block text-xs font-semibold text-[var(--text-dim)]">Email</label>
           <Input type="email" required className="w-full" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-400">Password</label>
+          <label className="mb-1 block text-xs font-semibold text-[var(--text-dim)]">Password</label>
           <Input type="password" required className="w-full" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         {error && <p className="text-sm text-rose-400">{error}</p>}
@@ -62,7 +62,7 @@ export default function AdminLoginPage() {
         </PrimaryButton>
       </form>
 
-      <p className="mt-6 text-center text-xs text-slate-500">
+      <p className="mt-6 text-center text-xs text-[var(--text-dim)]">
         Operator accounts are provisioned directly — no self-serve signup.
       </p>
     </div>

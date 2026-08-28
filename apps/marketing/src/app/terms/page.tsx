@@ -4,7 +4,7 @@ import { CONTACT_EMAIL } from "@/lib/config";
 
 export const metadata: Metadata = {
   title: "Terms of Service — VeriSprint",
-  description: "The terms governing use of the VeriSprint platform, GitHub App, and public site.",
+  description: "The terms governing use of the VeriSprint platform, GitHub App, and public site — intellectual property, liability, dispute resolution, and more.",
 };
 
 export default function TermsPage() {
@@ -41,6 +41,7 @@ export default function TermsPage() {
         <li>Use the service to build a directly competing product by systematically extracting its analysis via automated means.</li>
         <li>Share a Client Portal link with anyone the workspace owner hasn&apos;t authorized to receive it.</li>
         <li>Interfere with the service&apos;s availability for other workspaces (e.g. abusive request volume against the API).</li>
+        <li>Submit false, abusive, or spam content through the public Contact form.</li>
       </ul>
 
       <h2>4. Plans and billing</h2>
@@ -50,7 +51,7 @@ export default function TermsPage() {
         <a href="/pricing" className="text-brand underline">Pricing</a>, processed by Stripe. You can downgrade or
         cancel at any time from your workspace settings; downgrades take effect at the end of the current billing
         period, and features gated to a higher tier stop working (without deleting your underlying data) once the
-        downgrade applies.
+        downgrade applies. Fees are non-refundable except where required by law.
       </p>
 
       <h2>5. Your data, and what we do with it</h2>
@@ -71,7 +72,24 @@ export default function TermsPage() {
         review is fast, not so it can be skipped.
       </p>
 
-      <h2>7. Availability and changes</h2>
+      <h2>7. Intellectual property</h2>
+      <p>
+        VeriSprint and its underlying software, design, and branding are our intellectual property (or licensed to
+        us) — these terms grant you a limited, non-exclusive, non-transferable right to use the service, not
+        ownership of any part of it. You retain all rights to your own code, tickets, and content (Section 5). If
+        you send us feedback or feature suggestions, you grant us a royalty-free license to use them without
+        obligation — we won&apos;t claim you assigned us anything beyond that.
+      </p>
+
+      <h2>8. Third-party services</h2>
+      <p>
+        VeriSprint integrates with services we don&apos;t operate — GitHub, Slack, Jira, Linear, Stripe, and the
+        LLM provider you select. Your use of those services is governed by their own terms, and we&apos;re not
+        responsible for their availability, changes, or conduct, though we&apos;ll always tell you plainly which
+        of our own features that affects.
+      </p>
+
+      <h2>9. Availability and changes</h2>
       <p>
         We aim for high availability but don&apos;t guarantee an uptime SLA on Free or self-serve paid tiers — see
         our{" "}
@@ -80,7 +98,7 @@ export default function TermsPage() {
         removes a capability you&apos;re actively relying on.
       </p>
 
-      <h2>8. Termination</h2>
+      <h2>10. Termination</h2>
       <p>
         You can stop using VeriSprint and delete your workspace at any time. We may suspend or terminate access
         for a workspace that violates Section 3 (Acceptable use), with notice where practical, and will make a
@@ -88,22 +106,47 @@ export default function TermsPage() {
         active harm to the service or other users.
       </p>
 
-      <h2>9. Disclaimers and liability</h2>
+      <h2>11. Disclaimers and liability</h2>
       <p>
         VeriSprint is provided on an early-access, &ldquo;as-is&rdquo; basis — see the notice at the top of this
         page. We don&apos;t warrant that every judgment the system makes will be accurate; the whole design of the
         Evidence Ledger is to make that judgment inspectable and contestable, not infallible. To the extent
-        permitted by law, our liability for any claim arising from your use of the service is limited to the
-        amount you paid us in the 12 months before the claim.
+        permitted by law, we disclaim all implied warranties (merchantability, fitness for a particular purpose),
+        and our aggregate liability for any claim arising from your use of the service is limited to the amount
+        you paid us in the 12 months before the claim. Neither party is liable for indirect, incidental, or
+        consequential damages.
       </p>
 
-      <h2>10. Changes to these terms</h2>
+      <h2>12. Indemnification</h2>
+      <p>
+        You agree to indemnify us against claims arising from your breach of these terms or your misuse of the
+        service — for example, connecting a repository you didn&apos;t have the right to connect. We&apos;ll do
+        the same for claims that our unmodified service infringes a third party&apos;s intellectual property
+        rights.
+      </p>
+
+      <h2>13. Governing law and disputes</h2>
+      <p>
+        These terms are governed by the laws of the jurisdiction we&apos;re operating from at the time, without
+        regard to conflict-of-law rules. We&apos;d rather resolve a disagreement directly — email us first (Section
+        16) — before either party pursues formal dispute resolution.
+      </p>
+
+      <h2>14. General</h2>
+      <p>
+        If any part of these terms is found unenforceable, the rest stays in effect. We may update these terms
+        (Section 15); you may not assign your rights under them without our consent, except to a successor in a
+        merger or acquisition. A delay in enforcing a term isn&apos;t a waiver of it. These terms, plus the Privacy
+        Policy and DPA where applicable, are the entire agreement between us regarding the service.
+      </p>
+
+      <h2>15. Changes to these terms</h2>
       <p>
         If we make a material change, we&apos;ll update the effective date above and, for active workspace users,
         note it in-app before the change takes effect.
       </p>
 
-      <h2>11. Contact</h2>
+      <h2>16. Contact</h2>
       <p>
         Questions about these terms:{" "}
         <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand underline">

@@ -25,7 +25,7 @@ export default function AccuracyPage() {
       <Card className="mt-8 overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-[var(--line)] text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-dim)]">
               <th className="px-5 py-3">Month</th>
               <th className="px-5 py-3">Person</th>
               <th className="px-5 py-3">Tickets</th>
@@ -36,18 +36,18 @@ export default function AccuracyPage() {
           </thead>
           <tbody>
             {points.map((p, i) => (
-              <tr key={i} className="border-b border-slate-100 last:border-0">
-                <td className="px-5 py-3 font-mono text-xs text-slate-600">{p.month}</td>
-                <td className="px-5 py-3 text-slate-700">@{p.person_github_login}</td>
-                <td className="px-5 py-3 text-slate-700">{p.tickets_completed}</td>
-                <td className="px-5 py-3 text-slate-700">{p.tickets_with_unresolved_flags}</td>
-                <td className="px-5 py-3 text-slate-700">{p.avg_confidence_score ?? "—"}</td>
-                <td className="px-5 py-3 font-bold text-slate-900">{p.accuracy_pct}%</td>
+              <tr key={i} className="border-b border-[var(--line)] last:border-0">
+                <td className="px-5 py-3 font-mono text-xs text-[var(--text-muted)]">{p.month}</td>
+                <td className="px-5 py-3 text-[var(--text-muted)]">@{p.person_github_login}</td>
+                <td className="px-5 py-3 text-[var(--text-muted)]">{p.tickets_completed}</td>
+                <td className="px-5 py-3 text-[var(--text-muted)]">{p.tickets_with_unresolved_flags}</td>
+                <td className="px-5 py-3 text-[var(--text-muted)]">{p.avg_confidence_score ?? "—"}</td>
+                <td className="px-5 py-3 font-bold text-[var(--foreground)]">{p.accuracy_pct}%</td>
               </tr>
             ))}
             {points.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-8 text-center text-sm text-slate-500">
+                <td colSpan={6} className="px-5 py-8 text-center text-sm text-[var(--text-dim)]">
                   No confidence-scored tickets with an assignee yet.
                 </td>
               </tr>

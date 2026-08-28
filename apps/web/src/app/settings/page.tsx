@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type CurrentUser, type Integration, type WorkspaceSSOConfig, type WorkspaceSettings } from "@/lib/api";
+import { api, type CurrentUser, type Integration, type MCPConfig, type PricingPlan, type Subscription, type WorkspaceSSOConfig, type WorkspaceSettings } from "@/lib/api";
 import { useAccessTokenClaims } from "@/lib/auth";
+import { API_BASE_URL } from "@/lib/config";
 import { Badge, Card, Input, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
 
 const KNOWN_PROVIDERS = ["linear", "jira", "pagerduty", "datadog", "opsgenie"] as const;
@@ -39,8 +40,8 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2000);
   }
 
-  if (!workspaceId) return <div className="mx-auto max-w-lg px-6 py-16 text-sm text-slate-400">Sign in to a workspace to manage settings.</div>;
-  if (!settings) return <div className="mx-auto max-w-lg px-6 py-16 text-sm text-slate-400">Loading…</div>;
+  if (!workspaceId) return <div className="mx-auto max-w-lg px-6 py-16 text-sm text-[var(--text-dim)]">Sign in to a workspace to manage settings.</div>;
+  if (!settings) return <div className="mx-auto max-w-lg px-6 py-16 text-sm text-[var(--text-dim)]">Loading…</div>;
 
   return (
     <div className="mx-auto max-w-lg px-6 py-10">
@@ -56,7 +57,7 @@ export default function SettingsPage() {
         <Field label="Primary color">
           <input
             type="color"
-            className="h-10 w-16 rounded-lg border border-slate-300"
+            className="h-10 w-16 rounded-lg border border-[var(--line-strong)]"
             value={settings.primary_color_hex}
             onChange={(e) => setSettings({ ...settings, primary_color_hex: e.target.value })}
           />
@@ -79,10 +80,118 @@ export default function SettingsPage() {
         </div>
       </Card>
 
+      <BillingSection />
       <TeamSection />
       <IntegrationsSection workspaceId={workspaceId} />
       <SSOConfigSection />
+      <MCPConfigSection />
     </div>
+  );
+}
+
+const TIER_LABEL: Record<string, string> = { free: "Free", team: "Team", growth: "Growth", agency: "Agency", enterprise: "Enterprise" };
+
+function BillingSection() {
+  const [sub, setSub] = useState<Subscription | null>(null);
+  const [plans, setPlans] = useState<PricingPlan[]>([]);
+  const [provider, setProvider] = useState<"stripe" | "paystack">("stripe");
+  const [busyTier, setBusyTier] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function load() {
+    api.getSubscription().then(setSub);
+    api.listPricingPlans().then(setPlans);
+  }
+  useEffect(load, []);
+
+  async function subscribe(tier: string) {
+    setError(null);
+    setBusyTier(tier);
+    try {
+      const { checkout_url } = await api.createCheckout({
+        plan_tier: tier,
+        provider,
+        success_url: `${window.location.origin}/settings`,
+        cancel_url: `${window.location.origin}/settings`,
+      });
+      window.location.href = checkout_url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't start checkout — try again in a moment.");
+    } finally {
+      setBusyTier(null);
+    }
+  }
+
+  async function openPortal() {
+    setError(null);
+    try {
+      const { portal_url } = await api.createBillingPortal(`${window.location.origin}/settings`);
+      window.location.href = portal_url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't open the billing portal.");
+    }
+  }
+
+  if (!sub) return null;
+
+  return (
+    <Card className="mt-8 space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold text-[var(--foreground)]">Plan &amp; Billing</h2>
+          <p className="mt-1 text-xs text-[var(--text-dim)]">
+            Current plan: <strong className="text-[var(--text-muted)]">{TIER_LABEL[sub.plan_tier] ?? sub.plan_tier}</strong>
+            {sub.status !== "trialing" && <> · {sub.status}</>}
+            {sub.mrr > 0 && <> · ${sub.mrr.toLocaleString()}/mo</>}
+          </p>
+        </div>
+        {sub.plan_tier !== "free" && sub.payment_provider === "stripe" && (
+          <SecondaryButton onClick={openPortal}>Manage billing</SecondaryButton>
+        )}
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold text-[var(--text-dim)]">Pay with</p>
+        <div className="mt-1.5 flex gap-2">
+          <button
+            onClick={() => setProvider("stripe")}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${provider === "stripe" ? "border-brand bg-brand/10 text-brand" : "border-[var(--line-strong)] text-[var(--text-dim)]"}`}
+          >
+            Card (Stripe)
+          </button>
+          <button
+            onClick={() => setProvider("paystack")}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${provider === "paystack" ? "border-brand bg-brand/10 text-brand" : "border-[var(--line-strong)] text-[var(--text-dim)]"}`}
+          >
+            Paystack
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-[var(--text-dim)]">Paystack is for workspaces billed in a country Stripe doesn&apos;t support payouts to.</p>
+      </div>
+
+      {plans.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {plans.map((p) => (
+            <div key={p.tier} className={`rounded-xl border p-4 ${sub.plan_tier === p.tier ? "border-brand bg-brand/5" : "border-[var(--line)]"}`}>
+              <p className="font-semibold text-[var(--foreground)]">{p.name}</p>
+              <p className="mt-1 text-2xl font-bold text-[var(--foreground)]">
+                ${p.price_usd}
+                <span className="text-xs font-normal text-[var(--text-dim)]">/{p.billing_interval}</span>
+              </p>
+              {sub.plan_tier === p.tier ? (
+                <Badge tone="brand">Current plan</Badge>
+              ) : (
+                <SecondaryButton className="mt-3 w-full" onClick={() => subscribe(p.tier)} disabled={busyTier === p.tier}>
+                  {busyTier === p.tier ? "Redirecting…" : "Subscribe"}
+                </SecondaryButton>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {plans.length === 0 && <p className="text-xs text-[var(--text-dim)]">No self-serve plans configured yet.</p>}
+      {error && <p className="rounded-lg bg-rose-500/15 p-3 text-xs text-rose-400">{error}</p>}
+    </Card>
   );
 }
 
@@ -139,8 +248,8 @@ function TeamSection() {
   return (
     <Card className="mt-8 space-y-5">
       <div>
-        <h2 className="font-semibold text-slate-900">Team</h2>
-        <p className="mt-1 text-xs text-slate-500">
+        <h2 className="font-semibold text-[var(--foreground)]">Team</h2>
+        <p className="mt-1 text-xs text-[var(--text-dim)]">
           Invite teammates by email — they get a one-time link to set a password and join this workspace. GitHub
           OAuth remains available as the primary sign-in path for anyone in your GitHub org.
         </p>
@@ -148,17 +257,17 @@ function TeamSection() {
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[180px] flex-1">
-          <label className="block text-xs font-semibold text-slate-500">Email</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">Email</label>
           <Input className="mt-1.5 w-full" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@company.com" />
         </div>
         <div className="min-w-[140px]">
-          <label className="block text-xs font-semibold text-slate-500">Name (optional)</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">Name (optional)</label>
           <Input className="mt-1.5 w-full" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500">Role</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">Role</label>
           <select
-            className="mt-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+            className="mt-1.5 rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)]"
             value={role}
             onChange={(e) => setRole(e.target.value as (typeof INVITABLE_ROLES)[number])}
           >
@@ -175,16 +284,16 @@ function TeamSection() {
       {invited && <p className="text-sm font-medium text-emerald-600">Invite sent to {invited}.</p>}
       {error && <p className="text-sm text-rose-600">{error}</p>}
 
-      <div className="space-y-2 border-t border-slate-200 pt-4">
-        {!loaded && <p className="text-sm text-slate-400">Loading…</p>}
-        {loaded && members.length === 0 && <p className="text-sm text-slate-400">No teammates yet — invite one above.</p>}
+      <div className="space-y-2 border-t border-[var(--line)] pt-4">
+        {!loaded && <p className="text-sm text-[var(--text-dim)]">Loading…</p>}
+        {loaded && members.length === 0 && <p className="text-sm text-[var(--text-dim)]">No teammates yet — invite one above.</p>}
         {members.map((m) => {
           const isSelf = m.id === currentUserId;
           return (
-            <div key={m.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+            <div key={m.id} className="flex items-center justify-between gap-3 rounded-xl bg-[var(--background)] px-3 py-2 text-sm">
               <div className="min-w-0">
-                <p className="truncate font-medium text-slate-800">{m.name || m.email || m.github_login || "Unnamed"}</p>
-                <p className="truncate text-xs text-slate-500">{m.email ?? m.github_login}</p>
+                <p className="truncate font-medium text-[var(--foreground)]">{m.name || m.email || m.github_login || "Unnamed"}</p>
+                <p className="truncate text-xs text-[var(--text-dim)]">{m.email ?? m.github_login}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {isSelf ? (
@@ -192,7 +301,7 @@ function TeamSection() {
                 ) : (
                   <>
                     <select
-                      className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                      className="rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--text-muted)]"
                       value={m.role}
                       onChange={(e) => handleRoleChange(m.id, e.target.value)}
                     >
@@ -250,22 +359,22 @@ function IntegrationsSection({ workspaceId }: { workspaceId: string }) {
   return (
     <Card className="mt-8 space-y-5">
       <div>
-        <h2 className="font-semibold text-slate-900">Integrations</h2>
-        <p className="mt-1 text-xs text-slate-500">
+        <h2 className="font-semibold text-[var(--foreground)]">Integrations</h2>
+        <p className="mt-1 text-xs text-[var(--text-dim)]">
           Scaffolding for integrations beyond GitHub/Slack — connecting one stores its config for a future job to act on; it doesn&apos;t
           perform a live OAuth handshake.
         </p>
       </div>
 
       {enabled === null ? (
-        <p className="text-sm text-slate-400">Loading…</p>
+        <p className="text-sm text-[var(--text-dim)]">Loading…</p>
       ) : (
         <>
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-500">Provider</label>
+              <label className="block text-xs font-semibold text-[var(--text-dim)]">Provider</label>
               <select
-                className="mt-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                className="mt-1.5 rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)]"
                 value={provider}
                 onChange={(e) => setProvider(e.target.value as (typeof KNOWN_PROVIDERS)[number])}
               >
@@ -275,18 +384,18 @@ function IntegrationsSection({ workspaceId }: { workspaceId: string }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500">API key (optional)</label>
+              <label className="block text-xs font-semibold text-[var(--text-dim)]">API key (optional)</label>
               <Input className="mt-1.5" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="••••••" />
             </div>
             <PrimaryButton onClick={handleConnect}>Connect</PrimaryButton>
           </div>
 
           <div className="space-y-2">
-            {integrations.length === 0 && <p className="text-sm text-slate-400">No integrations connected yet.</p>}
+            {integrations.length === 0 && <p className="text-sm text-[var(--text-dim)]">No integrations connected yet.</p>}
             {integrations.map((i) => (
-              <div key={i.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+              <div key={i.id} className="flex items-center justify-between rounded-xl bg-[var(--background)] px-3 py-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-slate-700">{i.provider}</span>
+                  <span className="font-medium text-[var(--text-muted)]">{i.provider}</span>
                   <Badge tone={i.status === "connected" ? "success" : "default"}>{i.status}</Badge>
                 </div>
                 {i.status === "connected" && (
@@ -345,25 +454,25 @@ function SSOConfigSection() {
   return (
     <Card className="mt-8 space-y-5">
       <div>
-        <h2 className="font-semibold text-slate-900">SSO &amp; SCIM</h2>
-        <p className="mt-1 text-xs text-slate-500">Per-workspace OIDC configuration. Secrets are never returned once stored — only rotatable.</p>
+        <h2 className="font-semibold text-[var(--foreground)]">SSO &amp; SCIM</h2>
+        <p className="mt-1 text-xs text-[var(--text-dim)]">Per-workspace OIDC configuration. Secrets are never returned once stored — only rotatable.</p>
       </div>
 
       {enabled === null ? (
-        <p className="text-sm text-slate-400">Loading…</p>
+        <p className="text-sm text-[var(--text-dim)]">Loading…</p>
       ) : (
         <>
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-500">Issuer URL</label>
+              <label className="block text-xs font-semibold text-[var(--text-dim)]">Issuer URL</label>
               <Input className="mt-1.5 w-full" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="https://your-idp.example.com" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500">Client ID</label>
+              <label className="block text-xs font-semibold text-[var(--text-dim)]">Client ID</label>
               <Input className="mt-1.5 w-full" value={clientId} onChange={(e) => setClientId(e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500">Client secret {config && "(leave blank to keep current)"}</label>
+              <label className="block text-xs font-semibold text-[var(--text-dim)]">Client secret {config && "(leave blank to keep current)"}</label>
               <Input type="password" className="mt-1.5 w-full" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
             </div>
             <div className="flex items-center gap-3">
@@ -373,16 +482,16 @@ function SSOConfigSection() {
           </div>
 
           {config && (
-            <div className="border-t border-slate-200 pt-4">
+            <div className="border-t border-[var(--line)] pt-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-700">SCIM provisioning token</p>
-                  <p className="text-xs text-slate-400">{config.has_scim_token ? "A token has been generated." : "No token generated yet."}</p>
+                  <p className="text-sm font-medium text-[var(--text-muted)]">SCIM provisioning token</p>
+                  <p className="text-xs text-[var(--text-dim)]">{config.has_scim_token ? "A token has been generated." : "No token generated yet."}</p>
                 </div>
                 <SecondaryButton onClick={handleRotateToken}>{config.has_scim_token ? "Rotate token" : "Generate token"}</SecondaryButton>
               </div>
               {scimToken && (
-                <p className="mt-2 rounded-lg bg-amber-50 p-3 font-mono text-xs text-amber-900">
+                <p className="mt-2 rounded-lg bg-amber-500/15 p-3 font-mono text-xs text-amber-400">
                   {scimToken} — shown once, copy it now.
                 </p>
               )}
@@ -394,10 +503,72 @@ function SSOConfigSection() {
   );
 }
 
+function MCPConfigSection() {
+  const [config, setConfig] = useState<MCPConfig | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [rotating, setRotating] = useState(false);
+
+  useEffect(() => {
+    api.getMCPConfig().then(setConfig);
+  }, []);
+
+  async function handleRotateToken() {
+    setRotating(true);
+    try {
+      const { mcp_token } = await api.rotateMCPToken();
+      setToken(mcp_token);
+      setConfig(await api.getMCPConfig());
+    } finally {
+      setRotating(false);
+    }
+  }
+
+  return (
+    <Card className="mt-8 space-y-5">
+      <div>
+        <h2 className="font-semibold text-[var(--foreground)]">MCP Server</h2>
+        <p className="mt-1 text-xs text-[var(--text-dim)]">
+          Connect Claude Desktop, Cursor, or any MCP-compatible client to your Evidence Ledger — query tickets,
+          Confidence Scores, and Repo Chat directly from your AI tool. The token is never shown again after rotation.
+        </p>
+      </div>
+
+      {config === null ? (
+        <p className="text-sm text-[var(--text-dim)]">Loading…</p>
+      ) : (
+        <>
+          <div>
+            <label className="block text-xs font-semibold text-[var(--text-dim)]">Server URL</label>
+            <Input readOnly className="mt-1.5 w-full font-mono text-xs" value={`${API_BASE_URL}/mcp/mcp`} />
+          </div>
+
+          <div className="border-t border-[var(--line)] pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[var(--text-muted)]">Workspace token</p>
+                <p className="text-xs text-[var(--text-dim)]">{config.has_token ? "A token has been generated." : "No token generated yet."}</p>
+              </div>
+              <SecondaryButton onClick={handleRotateToken} disabled={rotating}>
+                {rotating ? "Rotating…" : config.has_token ? "Rotate token" : "Generate token"}
+              </SecondaryButton>
+            </div>
+            {token && (
+              <p className="mt-2 rounded-lg bg-amber-500/15 p-3 font-mono text-xs text-amber-400 break-all">
+                {token} — shown once, copy it now. Pass it as the <code>workspace_token</code> argument on every tool
+                call.
+              </p>
+            )}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-slate-500">{label}</label>
+      <label className="block text-xs font-semibold text-[var(--text-dim)]">{label}</label>
       <div className="mt-1.5">{children}</div>
     </div>
   );

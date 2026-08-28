@@ -65,16 +65,16 @@ export default function ResetPasswordPage() {
     <div className="relative overflow-hidden bg-sky-gradient">
       <div className="mx-auto flex min-h-[85vh] max-w-sm flex-col justify-center px-6 py-16">
         <div className="animate-fade-in-up rounded-3xl glass-card p-8">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-neon)] text-[#3f6212]">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-neon)] text-[#04201f]">
             <svg viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
             </svg>
           </span>
-          <h1 className="mt-4 text-2xl font-bold text-slate-900">Choose a new password</h1>
-          <p className="mt-1 text-sm text-slate-600">Set a new password for your account.</p>
+          <h1 className="mt-4 text-2xl font-bold text-[var(--foreground)]">Choose a new password</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Set a new password for your account.</p>
 
           {tokenChecked && !token && (
-            <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="mt-4 rounded-lg bg-amber-500/15 p-3 text-sm text-amber-400">
               This link is missing its reset token. Check that you copied the full link from the reset email, or{" "}
               <a href="/forgot-password" className="underline">request a new one</a>.
             </p>
@@ -82,12 +82,12 @@ export default function ResetPasswordPage() {
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-500">New password</label>
+              <label className="block text-xs font-semibold text-[var(--text-dim)]">New password</label>
               <Input type="password" required minLength={10} className="mt-1.5 w-full" value={password} onChange={(e) => setPassword(e.target.value)} />
-              <p className="mt-1 text-xs text-slate-400">At least 10 characters.</p>
+              <p className="mt-1 text-xs text-[var(--text-dim)]">At least 10 characters.</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500">Confirm new password</label>
+              <label className="block text-xs font-semibold text-[var(--text-dim)]">Confirm new password</label>
               <Input type="password" required className="mt-1.5 w-full" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
             </div>
             {error && <p className="text-sm text-rose-600">{error}</p>}

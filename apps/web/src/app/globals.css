@@ -1,28 +1,40 @@
 @import "tailwindcss";
 
 /*
- * Same brand tokens as apps/marketing (neon-lime accent, glass cards, sky
- * gradient) — the product app and the marketing site share one visual
- * language on purpose. Kept as a second copy rather than a shared package
- * since each app is its own deploy.
+ * Full dark theme, one 3-color system shared with apps/marketing and
+ * apps/admin: #0c1615 (page background), #16302f (card/surface), #4fb8c4
+ * (accent — buttons, links, active states). Every other token below is
+ * derived from those three, not an independent color choice — hover/text/
+ * border shades are tints of the same accent or bg/surface hues, and the
+ * only exceptions are the semantic status colors (success/danger/warning)
+ * used for badges and error states, which stay their conventional
+ * green/rose/amber regardless of theme since they encode meaning, not brand.
+ * `--accent-neon`/`-hover` keep their original variable names (every
+ * button/badge/focus-ring in this app references them) but now resolve to
+ * the shared accent teal.
  */
 :root {
-  --background: #f8fafc;
-  --foreground: #020617;
+  --background: #0c1615;
+  --foreground: #eef4f3;
 
-  --sky-gradient-start: #e0f2fe;
-  --sky-gradient-end: #bae6fd;
-  --accent-neon: #a3e635;
-  --accent-neon-hover: #84cc16;
-  --card-glass-bg: rgba(255, 255, 255, 0.7);
-  --card-glass-border: rgba(255, 255, 255, 0.5);
+  --surface: #16302f;
+  --surface-raised: #1c3a38;
+  --text-muted: #8ba39f;
+  --text-dim: #6b8783;
+  --line: #24403d;
+  --line-strong: #2f4d49;
 
-  --dark-bg: #020617;
-  --dark-card: #0f172a;
+  --accent-neon: #4fb8c4;
+  --accent-neon-hover: #74c9d3;
+  --card-glass-bg: rgba(22, 48, 47, 0.72);
+  --card-glass-border: rgba(79, 184, 196, 0.16);
+
+  --dark-bg: #0c1615;
+  --dark-card: #16302f;
 }
 
 @theme inline {
-  --color-brand: #001666;
+  --color-brand: #4fb8c4;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-accent: var(--accent-neon);
@@ -41,23 +53,23 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--card-glass-border);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25);
 }
 
 .glass-nav {
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(12, 22, 21, 0.88);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  border-bottom: 1px solid var(--line);
 }
 
 .bg-sky-gradient {
-  background: linear-gradient(135deg, var(--sky-gradient-start) 0%, var(--sky-gradient-end) 100%);
+  background: linear-gradient(135deg, #16302f 0%, #0c1615 100%);
 }
 
 .bg-dark-section {
   background-color: var(--dark-bg);
-  color: #f8fafc;
+  color: var(--foreground);
 }
 
 @keyframes float {
@@ -70,9 +82,9 @@ body {
 }
 
 @keyframes pulse-glow {
-  0% { box-shadow: 0 0 0 0 rgba(163, 230, 53, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(163, 230, 53, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(163, 230, 53, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(79, 184, 196, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(79, 184, 196, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(79, 184, 196, 0); }
 }
 .animate-pulse-glow {
   animation: pulse-glow 2s infinite;

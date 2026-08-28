@@ -16,8 +16,9 @@ from app.auth.dependencies import get_repo_for_user
 from app.db.models import Repo, StandupUpdate, Workspace
 from app.db.session import get_db
 from app.schemas import ROISummary
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/roi", tags=["roi"])
+router = APIRouter(prefix="/roi", tags=["roi"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("", response_model=ROISummary)

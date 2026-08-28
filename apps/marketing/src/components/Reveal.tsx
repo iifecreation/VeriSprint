@@ -70,3 +70,30 @@ export function RevealItem({ children, className = "" }: { children: ReactNode; 
     </motion.div>
   );
 }
+
+/** Fires immediately on mount instead of on scroll-into-view — for
+ * above-the-fold content (the hero) where there's no scroll to trigger off
+ * yet, but the first thing a visitor sees should still visibly move in
+ * rather than just appear. */
+export function FadeInOnLoad({
+  children,
+  delay = 0,
+  y = 16,
+  className = "",
+}: {
+  children: ReactNode;
+  delay?: number;
+  y?: number;
+  className?: string;
+}) {
+  return (
+    <motion.div
+      className={className}
+      initial={{ opacity: 0, y }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.7, delay, ease: [0.21, 0.47, 0.32, 0.98] }}
+    >
+      {children}
+    </motion.div>
+  );
+}

@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-      <body className="flex min-h-screen flex-col bg-white text-slate-900">
+      <body className="flex min-h-screen flex-col bg-[var(--surface)] text-[var(--foreground)]">
         <Nav />
         <main className="flex-1">{children}</main>
         <Footer />

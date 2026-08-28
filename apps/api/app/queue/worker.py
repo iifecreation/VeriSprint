@@ -25,6 +25,7 @@ from app.workers.orphans import detect_orphan_commits
 from app.workers.reconciliation import reconcile_ticket
 from app.workers.reports import (
     generate_client_portal_report,
+    generate_custom_report,
     generate_investor_update,
     generate_onboarding_doc,
     generate_sprint_rollup,
@@ -56,6 +57,7 @@ class WorkerSettings:
         capture_worker_errors("llm")(generate_investor_update),
         capture_worker_errors("llm")(generate_client_portal_report),
         capture_worker_errors("llm")(generate_onboarding_doc),
+        capture_worker_errors("analytics")(generate_custom_report),
         capture_worker_errors("email")(send_daily_digest),
     ]
     # Runs once a day (07:00 UTC) and fans out orphan-detection, anomaly

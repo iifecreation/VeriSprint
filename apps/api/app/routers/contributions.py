@@ -6,29 +6,20 @@ tools like Claude Code and GitHub Copilot actually write. This only catches
 what a commit message discloses; it is not a behavioral/stylometric guess at
 whether AI wrote the code.
 """
-import re
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai_signals import is_ai_assisted
 from app.auth.dependencies import get_repo_for_user, require_feature_flag
 from app.db.models import Commit, Repo
 from app.db.session import get_db
 from app.schemas import ContributionReport, ContributorStat
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/contributions", tags=["contributions"])
-
-# Real, known self-disclosure conventions — not a guess at authorship.
-_AI_PATTERNS = [
-    re.compile(r"co-authored-by:.*\b(claude|copilot|codex|gemini|cursor|devin|chatgpt|openai|anthropic)\b", re.IGNORECASE),
-    re.compile(r"generated (with|by)\b.*\b(claude|copilot|codex|gemini|cursor|devin|chatgpt|ai)\b", re.IGNORECASE),
-]
-
-
-def _is_ai_assisted(message: str) -> bool:
-    return any(p.search(message) for p in _AI_PATTERNS)
+router = APIRouter(prefix="/contributions", tags=["contributions"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("", response_model=ContributionReport, dependencies=[Depends(require_feature_flag("ai_contribution_tracker"))])
@@ -47,7 +38,7 @@ async def get_contribution_report(
 
     by_author: dict[str, list[bool]] = {}
     for author, message in rows:
-        by_author.setdefault(author, []).append(_is_ai_assisted(message or ""))
+        by_author.setdefault(author, []).append(is_ai_assisted(message or ""))
 
     contributors = [
         ContributorStat(
