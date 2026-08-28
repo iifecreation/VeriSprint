@@ -11,8 +11,9 @@ from app.db.models import Repo, User
 from app.db.session import get_db
 from app.queue.client import enqueue
 from app.schemas import RepoOut, RepoUpdate
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/repos", tags=["repos"])
+router = APIRouter(prefix="/repos", tags=["repos"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("", response_model=list[RepoOut])

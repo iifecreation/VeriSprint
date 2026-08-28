@@ -90,19 +90,19 @@ export default function SprintsPage() {
 
       <Card className="mt-8 flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-xs font-semibold text-slate-500">Sprint name</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">Sprint name</label>
           <Input className="mt-1.5" value={name} onChange={(e) => setName(e.target.value)} placeholder="Sprint 12" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500">Start</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">Start</label>
           <Input type="date" className="mt-1.5" value={start} onChange={(e) => setStart(e.target.value)} />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500">End</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">End</label>
           <Input type="date" className="mt-1.5" value={end} onChange={(e) => setEnd(e.target.value)} />
         </div>
         <div className="min-w-[200px] flex-1">
-          <label className="block text-xs font-semibold text-slate-500">Planned ticket keys (comma-separated)</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">Planned ticket keys (comma-separated)</label>
           <Input className="mt-1.5 w-full" value={ticketKeys} onChange={(e) => setTicketKeys(e.target.value)} placeholder="ENG-1, ENG-2" />
         </div>
         <PrimaryButton onClick={handleCreate} disabled={!repoId || !name.trim()}>
@@ -113,7 +113,7 @@ export default function SprintsPage() {
       {sprints.length > 0 && (
         <div className="mt-6">
           <select
-            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900"
+            className="rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--foreground)]"
             value={selectedSprintId ?? ""}
             onChange={(e) => setSelectedSprintId(e.target.value)}
           >
@@ -128,7 +128,7 @@ export default function SprintsPage() {
 
       {burndown && (
         <Card className="mt-6">
-          <h2 className="text-sm font-semibold text-slate-900">
+          <h2 className="text-sm font-semibold text-[var(--foreground)]">
             {burndown.sprint.name} — confidence-weighted completion (real evidence, not self-reported %)
           </h2>
           <div className="mt-6 flex items-end gap-1.5" style={{ height: 160 }}>
@@ -143,13 +143,13 @@ export default function SprintsPage() {
                   style={{ height: `${maxWeighted ? (p.confidence_weighted_complete / maxWeighted) * 140 : 0}px` }}
                 />
                 <div
-                  className="w-full rounded-t-md bg-slate-200"
+                  className="w-full rounded-t-md bg-[var(--line)]"
                   style={{ height: `${maxWeighted ? ((p.planned_tickets - p.confidence_weighted_complete) / maxWeighted) * 140 : 0}px` }}
                 />
               </div>
             ))}
           </div>
-          <p className="mt-4 text-xs text-slate-500">
+          <p className="mt-4 text-xs text-[var(--text-dim)]">
             Green = confidence-weighted complete (sum of score/100 across planned tickets), grey = remaining. {burndown.points.length} day(s) of real
             data — no synthetic points for days that haven&apos;t happened yet.
           </p>
@@ -159,7 +159,7 @@ export default function SprintsPage() {
       {selectedSprintId && forecastEnabled && (
         <Card className="mt-6">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-slate-900">Delivery forecast</h2>
+            <h2 className="text-sm font-semibold text-[var(--foreground)]">Delivery forecast</h2>
             <SecondaryButton onClick={handleForecast} disabled={forecastStatus === "loading"}>
               {forecastStatus === "loading" ? "Projecting…" : forecast ? "Refresh" : "Project completion"}
             </SecondaryButton>
@@ -167,19 +167,19 @@ export default function SprintsPage() {
           {forecastStatus === "error" && <p className="mt-2 text-sm text-rose-600">Couldn&apos;t reach the API to project this sprint.</p>}
           {forecastStatus === "loading" && <div className="mt-3"><LoadingState /></div>}
           {forecast && (
-            <div className="mt-3 space-y-1 text-sm text-slate-700">
+            <div className="mt-3 space-y-1 text-sm text-[var(--text-muted)]">
               <p>
                 {forecast.current_confidence_weighted_complete.toFixed(1)} / {forecast.planned_tickets} confidence-weighted complete so far
                 {forecast.velocity_per_day !== null && <> · {forecast.velocity_per_day}/day velocity</>}
               </p>
               {forecast.projected_completion_date ? (
-                <p className="font-semibold text-slate-900">
+                <p className="font-semibold text-[var(--foreground)]">
                   Projected completion: {new Date(forecast.projected_completion_date).toLocaleDateString()}
                 </p>
               ) : (
-                forecast.projection_note && <p className="text-slate-500">{forecast.projection_note}</p>
+                forecast.projection_note && <p className="text-[var(--text-dim)]">{forecast.projection_note}</p>
               )}
-              <p className="mt-2 text-xs text-slate-400">{forecast.method}</p>
+              <p className="mt-2 text-xs text-[var(--text-dim)]">{forecast.method}</p>
             </div>
           )}
         </Card>

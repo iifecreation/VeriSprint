@@ -2,6 +2,7 @@
 import logging
 import sys
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,10 +12,12 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.db.session import AsyncSessionLocal
+from app.mcp_server import mcp_app
 from app.observability import record_error
 from app.routers import (
     accuracy,
     admin,
+    ai_cost,
     allocation,
     audit,
     auth,
@@ -24,6 +27,7 @@ from app.routers import (
     chat,
     client_portal,
     code_health,
+    contact,
     contributions,
     dashboard,
     dora,
@@ -32,8 +36,10 @@ from app.routers import (
     github_app,
     goals,
     integrations,
+    mcp_config,
     orphans,
     pr_autoroute,
+    pricing,
     pulse,
     repos,
     reports,
@@ -76,6 +82,19 @@ if settings.sentry_dsn:
         send_default_pii=False,
     )
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # `app.mount()` below wires the MCP server's ASGI app onto the request
+    # path, but mounting alone does NOT forward Starlette lifespan events to
+    # it — uvicorn only ever sends "lifespan" to this root app. The MCP SDK's
+    # session manager needs its own `.run()` context active for the whole
+    # process lifetime (it raises "Task group is not initialized" on every
+    # request otherwise), so that sub-app's lifespan is entered explicitly
+    # here, nested inside this one.
+    async with mcp_app.router.lifespan_context(mcp_app):
+        yield
+
+
 app = FastAPI(
     title="VeriSprint API",
     description=(
@@ -84,6 +103,7 @@ app = FastAPI(
         "auto-drafts standups, and answers Repo Chat questions."
     ),
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -164,12 +184,22 @@ app.include_router(audit.router)
 app.include_router(orphans.router)
 app.include_router(reports.router)
 app.include_router(client_portal.router)
+app.include_router(contact.router)
 app.include_router(sprints.router)
 app.include_router(accuracy.router)
 app.include_router(roi.router)
 app.include_router(work_units.router)
 app.include_router(sso.router)
 app.include_router(settings_router.router)
+app.include_router(mcp_config.router)
+app.include_router(ai_cost.router)
+app.include_router(pricing.router)
+
+# The MCP server (app/mcp_server.py) is a separate Starlette ASGI app, not a
+# FastAPI router — mounted rather than included so its own transport
+# (streamable HTTP) handles /mcp/mcp directly instead of being wrapped by
+# FastAPI's routing. Its lifespan is wired in above (see `lifespan()`).
+app.mount("/mcp", mcp_app)
 
 
 @app.get("/health")

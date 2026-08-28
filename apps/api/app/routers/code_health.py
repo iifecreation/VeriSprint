@@ -16,8 +16,9 @@ from app.auth.dependencies import get_repo_for_user, require_feature_flag
 from app.db.models import Commit, EvidenceItem, EvidenceKind, Repo
 from app.db.session import get_db
 from app.schemas import CodeHealthSignals
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/code-health", tags=["code-health"])
+router = APIRouter(prefix="/code-health", tags=["code-health"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("", response_model=CodeHealthSignals, dependencies=[Depends(require_feature_flag("code_health_signals"))])

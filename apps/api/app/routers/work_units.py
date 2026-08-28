@@ -15,8 +15,9 @@ from app.auth.dependencies import get_workspace_for_user
 from app.db.models import Commit, Repo, Workspace
 from app.db.session import get_db
 from app.schemas import LogicalWorkUnit
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/work-units", tags=["multi-repo"])
+router = APIRouter(prefix="/work-units", tags=["multi-repo"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("", response_model=list[LogicalWorkUnit])

@@ -49,7 +49,7 @@ export default function InsightsPage() {
       </div>
 
       {!flags ? (
-        <p className="mt-8 text-sm text-slate-400">Loading…</p>
+        <p className="mt-8 text-sm text-[var(--text-dim)]">Loading…</p>
       ) : (
         <div className="mt-8 grid gap-6 sm:grid-cols-2">
           <Panel title="DORA Metrics" enabled={flags.dora_panel}>
@@ -73,11 +73,11 @@ export default function InsightsPage() {
 function Panel({ title, enabled, children }: { title: string; enabled: boolean; children: React.ReactNode }) {
   return (
     <Card>
-      <h2 className="font-semibold text-slate-900">{title}</h2>
+      <h2 className="font-semibold text-[var(--foreground)]">{title}</h2>
       {enabled ? (
         children
       ) : (
-        <p className="mt-2 text-xs text-slate-400">Not enabled for your workspace — a Super Admin can turn this on from the Operator Console.</p>
+        <p className="mt-2 text-xs text-[var(--text-dim)]">Not enabled for your workspace — a Super Admin can turn this on from the Operator Console.</p>
       )}
     </Card>
   );
@@ -86,8 +86,8 @@ function Panel({ title, enabled, children }: { title: string; enabled: boolean; 
 function Stat({ label, value }: { label: string; value: string | number | null }) {
   return (
     <div className="mt-2 flex justify-between text-sm">
-      <span className="text-slate-500">{label}</span>
-      <span className="font-semibold text-slate-900">{value ?? "—"}</span>
+      <span className="text-[var(--text-dim)]">{label}</span>
+      <span className="font-semibold text-[var(--foreground)]">{value ?? "—"}</span>
     </div>
   );
 }
@@ -97,13 +97,13 @@ function DoraPanel({ repoId, start, end }: { repoId: string; start: string; end:
   useEffect(() => {
     api.getDora(repoId, `${start}T00:00:00Z`, `${end}T23:59:59Z`).then(setData).catch(() => setData(null));
   }, [repoId, start, end]);
-  if (!data) return <p className="mt-2 text-xs text-slate-400">Loading…</p>;
+  if (!data) return <p className="mt-2 text-xs text-[var(--text-dim)]">Loading…</p>;
   return (
     <div>
       <Stat label="Merged PRs" value={data.deployed_pr_count} />
       <Stat label="Deploys / day" value={data.deployment_frequency_per_day} />
       <Stat label="Lead time (hrs)" value={data.lead_time_for_changes_hours} />
-      <p className="mt-3 text-xs text-slate-400">{data.unavailable_metrics_note}</p>
+      <p className="mt-3 text-xs text-[var(--text-dim)]">{data.unavailable_metrics_note}</p>
     </div>
   );
 }
@@ -113,7 +113,7 @@ function CodeHealthPanel({ repoId, start, end }: { repoId: string; start: string
   useEffect(() => {
     api.getCodeHealth(repoId, `${start}T00:00:00Z`, `${end}T23:59:59Z`).then(setData).catch(() => setData(null));
   }, [repoId, start, end]);
-  if (!data) return <p className="mt-2 text-xs text-slate-400">Loading…</p>;
+  if (!data) return <p className="mt-2 text-xs text-[var(--text-dim)]">Loading…</p>;
   return (
     <div>
       <Stat label="Health score" value={data.health_score !== null ? `${data.health_score}%` : "Not enough evidence yet"} />
@@ -129,7 +129,7 @@ function RiskPanel({ repoId }: { repoId: string }) {
   useEffect(() => {
     api.getRiskRadar(repoId).then(setData).catch(() => setData(null));
   }, [repoId]);
-  if (!data) return <p className="mt-2 text-xs text-slate-400">Loading…</p>;
+  if (!data) return <p className="mt-2 text-xs text-[var(--text-dim)]">Loading…</p>;
   return (
     <div>
       <Stat label="Risk score" value={`${data.risk_score}%`} />
@@ -149,16 +149,16 @@ function GoalsPanel({ workspaceId }: { workspaceId: string }) {
   }, [workspaceId]);
   return (
     <div>
-      {goals.length === 0 && <p className="mt-2 text-xs text-slate-400">No goals set yet.</p>}
+      {goals.length === 0 && <p className="mt-2 text-xs text-[var(--text-dim)]">No goals set yet.</p>}
       {goals.map((g) => (
         <div key={g.id} className="mt-3">
           <div className="flex justify-between text-sm">
-            <span className="text-slate-700">{g.name}</span>
-            <span className="text-slate-500">
+            <span className="text-[var(--text-muted)]">{g.name}</span>
+            <span className="text-[var(--text-dim)]">
               {g.current_value ?? "—"} / {g.target_value}
             </span>
           </div>
-          <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100">
+          <div className="mt-1.5 h-1.5 w-full rounded-full bg-[var(--surface-raised)]">
             <div
               className="h-1.5 rounded-full bg-[var(--accent-neon-hover)]"
               style={{ width: `${Math.min(g.progress_pct ?? 0, 100)}%` }}

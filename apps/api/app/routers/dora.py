@@ -15,8 +15,9 @@ from app.auth.dependencies import get_repo_for_user, require_feature_flag
 from app.db.models import Commit, PullRequest, Repo
 from app.db.session import get_db
 from app.schemas import DORAMetrics
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/dora", tags=["dora"])
+router = APIRouter(prefix="/dora", tags=["dora"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("", response_model=DORAMetrics, dependencies=[Depends(require_feature_flag("dora_panel"))])

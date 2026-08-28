@@ -5,20 +5,28 @@ export function Section({
   children,
   className = "",
   variant = "default",
+  innerClassName,
+  background,
 }: {
   children: ReactNode;
   className?: string;
   variant?: "default" | "sky" | "dark";
+  /** Overrides the default `py-20 sm:py-28` on the inner wrapper — for a
+   * section (like the hero) that needs to own its own exact vertical rhythm
+   * instead of stacking on top of the standard section padding. */
+  innerClassName?: string;
+  background?: ReactNode;
 }) {
   const bgClass =
     variant === "sky"
       ? "bg-sky-gradient"
       : variant === "dark"
       ? "bg-dark-section"
-      : "bg-white";
+      : "bg-[var(--background)]";
   return (
     <section className={`relative overflow-hidden ${bgClass} ${className}`}>
-      <div className="mx-auto max-w-7xl px-6 py-20 sm:py-28 relative z-10">{children}</div>
+      {background}
+      <div className={`mx-auto max-w-7xl px-6 relative z-10 ${innerClassName ?? "py-20 sm:py-28"}`}>{children}</div>
     </section>
   );
 }
@@ -31,21 +39,20 @@ export function Eyebrow({ children }: { children: ReactNode }) {
   );
 }
 
-export function PageHeader({ eyebrow, title, subtitle }: { eyebrow?: string; title: string; subtitle?: string }) {
+export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div className="mx-auto max-w-3xl px-6 pb-4 pt-16 text-center sm:pt-24 relative z-20">
-      {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
-      <h1 className="mt-4 text-5xl font-bold tracking-tight text-slate-900 sm:text-7xl !leading-tight">
+    <div className="mx-auto max-w-3xl px-6 pb-4 pt-0 text-center relative z-20">
+      <h1 className="text-5xl font-bold tracking-tight text-[var(--foreground)] sm:text-7xl !leading-tight">
         {title}
       </h1>
-      {subtitle && <p className="mx-auto mt-6 max-w-2xl text-xl text-slate-600 leading-relaxed">{subtitle}</p>}
+      {subtitle && <p className="mx-auto mt-6 max-w-2xl text-xl text-[var(--text-muted)] leading-relaxed">{subtitle}</p>}
     </div>
   );
 }
 
 export function Card({ children, className = "", glass = false }: { children: ReactNode; className?: string; glass?: boolean }) {
   return (
-    <div className={`rounded-xl ${glass ? "glass-card" : "border border-slate-200 bg-white"} p-8 transition-all hover:border-white/20 hover:shadow-md ${className}`}>
+    <div className={`rounded-xl ${glass ? "glass-card" : "border border-[var(--line)] bg-[var(--surface)]"} p-8 transition-all hover:border-[var(--accent-neon)]/25 hover:shadow-md ${className}`}>
       {children}
     </div>
   );
@@ -53,7 +60,7 @@ export function Card({ children, className = "", glass = false }: { children: Re
 
 export function CheckIcon() {
   return (
-    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-neon)]/20 text-blue-700 shrink-0">
+    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-neon)]/20 text-brand shrink-0">
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden>
         <path
           fillRule="evenodd"
@@ -69,7 +76,7 @@ export function PrimaryButton({ href, children, className = "" }: { href: string
   return (
     <Link
       href={href}
-      className={`inline-flex items-center justify-center rounded-lg bg-brand px-8 py-3.5 text-base font-semibold text-slate-900 transition-colors hover:bg-brand/90 shadow-sm ${className}`}
+      className={`inline-flex items-center justify-center rounded-lg bg-brand px-8 py-3.5 text-base font-semibold text-[#04201f] transition-colors hover:bg-[var(--accent-neon-hover)] shadow-sm ${className}`}
     >
       {children}
     </Link>
@@ -80,7 +87,7 @@ export function SecondaryButton({ href, children, className = "" }: { href: stri
   return (
     <Link
       href={href}
-      className={`inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-8 py-3.5 text-base font-semibold text-slate-900 transition-colors hover:bg-slate-50 shadow-sm ${className}`}
+      className={`inline-flex items-center justify-center rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-8 py-3.5 text-base font-semibold text-[var(--foreground)] transition-colors hover:bg-[var(--surface-raised)] shadow-sm ${className}`}
     >
       {children}
     </Link>
@@ -92,12 +99,12 @@ export function SecondaryButton({ href, children, className = "" }: { href: stri
  * native element instead of reimplementing it. */
 export function FAQItem({ question, answer }: { question: string; answer: ReactNode }) {
   return (
-    <details className="group border-b border-slate-200 py-6 [&_summary::-webkit-details-marker]:hidden">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-lg font-semibold text-slate-900">
+    <details className="group border-b border-[var(--line)] py-6 [&_summary::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-lg font-semibold text-[var(--foreground)]">
         {question}
-        <span className="shrink-0 text-2xl text-slate-400 transition-transform group-open:rotate-45">+</span>
+        <span className="shrink-0 text-2xl text-[var(--text-dim)] transition-transform group-open:rotate-45">+</span>
       </summary>
-      <div className="mt-4 max-w-3xl text-base leading-relaxed text-slate-600">{answer}</div>
+      <div className="mt-4 max-w-3xl text-base leading-relaxed text-[var(--text-muted)]">{answer}</div>
     </details>
   );
 }
@@ -117,7 +124,7 @@ export function FAQSection({ items }: { items: { question: string; answer: React
  * yet (see /security). Overstating this here would contradict that page. */
 export function TrustBadgeRow({ items }: { items: string[] }) {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm font-medium text-slate-500">
+    <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm font-medium text-[var(--text-muted)]">
       {items.map((item) => (
         <span key={item} className="inline-flex items-center gap-2">
           <CheckIcon />

@@ -16,11 +16,12 @@ Subscription, FeatureFlag, ClientPortalLink).
 """
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
+    Date,
     Enum,
     Float,
     ForeignKey,
@@ -127,6 +128,17 @@ class Workspace(Base):
     # ROI calculator inputs — hourly_rate_usd never defaults; see routers/roi.py.
     avg_standup_minutes: Mapped[int] = mapped_column(default=15)
     hourly_rate_usd: Mapped[float | None] = mapped_column(Float)
+    # A real, random per-workspace bearer token for the MCP server (see
+    # app/mcp_server.py) — an external MCP client (Claude Desktop, Cursor,
+    # etc.) authenticates a tool call with this, same rotate-not-recover
+    # discipline as WorkspaceSSOConfig.scim_token. Null until generated.
+    mcp_token: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
+    # Set once, at creation (see app/routers/github_app.py::_handle_installation_created)
+    # to created_at + 2 days — never extended automatically. A workspace's
+    # real, effective access is `app.billing_access.workspace_has_active_access`,
+    # which also honors `plan_tier != FREE` (a real paid plan); this column
+    # alone is just the trial clock.
+    trial_ends_at: Mapped[datetime | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
@@ -374,6 +386,11 @@ class ReportType(str, enum.Enum):
     INVESTOR_UPDATE = "investor_update"
     SPRINT_ROLLUP = "sprint_rollup"
     ONBOARDING_DOC = "onboarding_doc"
+    # Report Builder: a workspace picks which real sections go in, instead of
+    # a fixed template — see `custom_sections` below and
+    # app/workers/reports.py's `generate_custom_report`. Deterministically
+    # assembled from real rows, no LLM narrative step, unlike the other types.
+    CUSTOM = "custom"
 
 
 class ReportDocument(Base):
@@ -397,6 +414,10 @@ class ReportDocument(Base):
     # Set only for CLIENT_PORTAL reports — the unauthenticated, unguessable
     # token a client uses to view their portal without any login sharing.
     share_token: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
+    # Report Builder only (ReportType.CUSTOM): the ordered list of section
+    # keys the workspace picked (e.g. ["shipped_activity", "cost_capitalization"]).
+    # Null for every other report type.
+    custom_sections: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
@@ -490,6 +511,15 @@ class Subscription(Base):
     stripe_customer_id: Mapped[str | None] = mapped_column(String(255), index=True)
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     payment_provider_ref: Mapped[str | None] = mapped_column(String(255))
+    # Which processor this workspace actually pays through — "stripe" (the
+    # original, default) or "paystack" (added for workspaces whose business
+    # is based somewhere Stripe can't pay out to, e.g. most of Africa;
+    # Paystack is itself a Stripe subsidiary built for exactly that gap).
+    # A workspace has at most one active provider at a time — switching
+    # providers means canceling and re-subscribing, not a dual-bill state.
+    payment_provider: Mapped[str] = mapped_column(String(20), default="stripe")
+    paystack_customer_code: Mapped[str | None] = mapped_column(String(255), index=True)
+    paystack_subscription_code: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
@@ -670,5 +700,92 @@ class WorkspaceSSOConfig(Base):
     # (Phase 3: "SSO/SAML+SCIM extension") — rotate via the settings endpoint,
     # never returned again after creation except on explicit rotation.
     scim_token: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class ContactMessage(Base):
+    """
+    A real submission from the public marketing site's Contact page — not
+    tied to any workspace (the sender isn't a VeriSprint user yet, that's
+    the point of the form). Surfaces in the Super-Admin Dashboard so a real
+    person sees it, and best-effort emails the internal team the moment it
+    arrives — see `POST /contact`.
+    """
+
+    __tablename__ = "contact_messages"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    name: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    reason: Mapped[str] = mapped_column(String(64))  # enterprise | security | bug_report | other
+    message: Mapped[str] = mapped_column(Text)
+    resolved_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    resolved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), index=True)
+
+
+class AIToolSubscription(Base):
+    """
+    A workspace's own AI coding tool spend — GitHub Copilot, Cursor, Claude
+    Code, Windsurf, etc. — entered by the workspace, not inferred. This is
+    deliberately scoped to a workspace's own subscriptions and never makes a
+    comparative claim about any vendor's product; it exists to sit next to
+    the AI Contribution Tracker's adoption percentage (app/routers/contributions.py)
+    and Cost Capitalization (app/routers/capitalization.py) so a workspace can
+    see what it's paying for AI tooling next to what it's measurably getting
+    from it — see `GET /ai-tool-costs/report`.
+    """
+
+    __tablename__ = "ai_tool_subscriptions"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    tool_name: Mapped[str] = mapped_column(String(120))
+    seat_count: Mapped[int] = mapped_column(default=1)
+    cost_per_seat_usd: Mapped[float] = mapped_column(Float)
+    billing_period: Mapped[str] = mapped_column(String(16))  # monthly | annual
+    started_on: Mapped[date] = mapped_column(Date)
+    ended_on: Mapped[date | None] = mapped_column(Date, nullable=True)  # null = still active
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class PricingPlan(Base):
+    """
+    The live, admin-editable price for one self-serve WorkspacePlanTier
+    (team/growth/agency — FREE and ENTERPRISE are never sold through
+    Checkout, see app/routers/billing.py). This table is the single source
+    of truth for "how much does this tier cost" — `apps/marketing`'s pricing
+    page and the Checkout flow both read it live, and a Super Admin edit
+    here is what should ever change a price, never a manual edit to a
+    provider's dashboard or an env var redeploy.
+
+    Editing `price_usd` does not mutate a provider's existing Price/Plan
+    object in place — Stripe Prices are immutable by design, and even where
+    a provider allows in-place edits (Paystack does), silently reprising an
+    object a currently-subscribed customer is already attached to would
+    change what they're charged without their consent. Instead, saving a
+    new price creates a *new* provider-side Price/Plan and repoints
+    `stripe_price_id`/`paystack_plan_code` at it — new Checkout sessions use
+    the new price; existing subscriptions keep their original price until
+    that customer changes plans through the Billing Portal.
+    """
+
+    __tablename__ = "pricing_plans"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tier: Mapped[WorkspacePlanTier] = mapped_column(Enum(WorkspacePlanTier), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    price_usd: Mapped[float] = mapped_column(Float)
+    billing_interval: Mapped[str] = mapped_column(String(16), default="month")  # month | year
+    is_active: Mapped[bool] = mapped_column(default=True)
+    # Provider-side objects auto-created/rotated by app/routers/pricing.py
+    # whenever price_usd changes — never hand-entered.
+    stripe_price_id: Mapped[str | None] = mapped_column(String(255))
+    paystack_plan_code: Mapped[str | None] = mapped_column(String(255))
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

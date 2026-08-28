@@ -1,6 +1,7 @@
 """Pydantic (API) schemas — request/response shapes, kept separate from ORM models."""
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -66,6 +67,7 @@ class TicketOut(BaseModel):
     title: str
     status: str
     assignee_github_login: str | None
+    acceptance_criteria: str | None = None
     confidence: ConfidenceScoreOut | None = None
     flags: list[ReconciliationFlagOut] = []
 
@@ -166,6 +168,7 @@ class ReportDocumentOut(BaseModel):
     summary_text: str
     status: str
     share_token: str | None
+    custom_sections: list[str] | None = None
     created_at: datetime
 
 
@@ -175,6 +178,20 @@ class GenerateReportRequest(BaseModel):
     period_start: datetime | None = None  # required except for onboarding_doc
     period_end: datetime | None = None  # required except for onboarding_doc
     sprint_id: uuid.UUID | None = None  # required for sprint_rollup
+
+
+class GenerateCustomReportRequest(BaseModel):
+    repo_id: uuid.UUID
+    title: str | None = None
+    period_start: datetime
+    period_end: datetime
+    sections: list[str] = Field(min_length=1)
+
+
+class ReportSectionOption(BaseModel):
+    key: str
+    label: str
+    description: str
 
 
 class AccuracyPoint(BaseModel):
@@ -421,6 +438,7 @@ class AdminOverview(BaseModel):
     total_mrr: float
     open_error_count: int
     unresolved_flag_count: int
+    open_contact_message_count: int
 
 
 # --- Billing (spec Section 7) -------------------------------------------------
@@ -429,6 +447,7 @@ class CheckoutRequest(BaseModel):
     plan_tier: str
     success_url: str
     cancel_url: str
+    provider: Literal["stripe", "paystack"] = "stripe"
 
 
 class CheckoutResponse(BaseModel):
@@ -451,8 +470,33 @@ class SubscriptionOut(BaseModel):
     plan_tier: str
     status: str
     mrr: float
+    payment_provider: str
     renewed_at: datetime | None
     created_at: datetime
+    # Denormalized from Workspace for the dashboard's trial banner — see
+    # app/billing_access.py for the actual access-control logic these two
+    # fields describe; this is just a read-friendly summary of it.
+    trial_ends_at: datetime | None = None
+    has_active_access: bool = True
+
+
+class PricingPlanOut(BaseModel):
+    id: uuid.UUID
+    tier: str
+    name: str
+    price_usd: float
+    billing_interval: str
+    is_active: bool
+    has_stripe_price: bool
+    has_paystack_plan: bool
+    updated_at: datetime
+
+
+class PricingPlanUpdate(BaseModel):
+    name: str | None = None
+    price_usd: float | None = Field(default=None, ge=0)
+    billing_interval: Literal["month", "year"] | None = None
+    is_active: bool | None = None
 
 
 class ResolvedFeatureFlags(BaseModel):
@@ -709,3 +753,92 @@ class WorkspaceSSOConfigUpsert(BaseModel):
     client_id: str
     client_secret: str
     enabled: bool = True
+
+
+CONTACT_REASONS = {"enterprise", "security", "bug_report", "other"}
+
+
+class ContactMessageCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    email: EmailStr
+    reason: str = "other"
+    message: str = Field(min_length=1, max_length=5000)
+
+
+class ContactMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    email: str
+    reason: str
+    message: str
+    resolved_at: datetime | None
+    created_at: datetime
+
+
+class MCPConfigOut(BaseModel):
+    has_token: bool
+
+
+class AIToolSubscriptionCreate(BaseModel):
+    tool_name: str = Field(min_length=1, max_length=120)
+    seat_count: int = Field(gt=0)
+    cost_per_seat_usd: float = Field(ge=0)
+    billing_period: Literal["monthly", "annual"]
+    started_on: date
+    ended_on: date | None = None
+    notes: str | None = None
+
+
+class AIToolSubscriptionUpdate(BaseModel):
+    tool_name: str | None = Field(default=None, min_length=1, max_length=120)
+    seat_count: int | None = Field(default=None, gt=0)
+    cost_per_seat_usd: float | None = Field(default=None, ge=0)
+    billing_period: Literal["monthly", "annual"] | None = None
+    started_on: date | None = None
+    ended_on: date | None = None
+    notes: str | None = None
+
+
+class AIToolSubscriptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    tool_name: str
+    seat_count: int
+    cost_per_seat_usd: float
+    billing_period: str
+    started_on: date
+    ended_on: date | None
+    notes: str | None
+    created_at: datetime
+    # Derived, not stored — every subscription's cost normalized to a
+    # monthly figure (annual / 12) so mixed billing periods can be summed.
+    monthly_cost_usd: float
+    is_active: bool
+
+
+class AIToolCostReportEntry(BaseModel):
+    tool_name: str
+    seat_count: int
+    monthly_cost_usd: float
+
+
+class AIToolCostReport(BaseModel):
+    total_monthly_cost_usd: float
+    active_subscription_count: int
+    entries: list[AIToolCostReportEntry]
+    subscriptions: list[AIToolSubscriptionOut]
+    # Present only when a repo_id is passed — cross-references spend against
+    # the AI Contribution Tracker's real, self-disclosed adoption signal for
+    # that repo (app/routers/contributions.py), never a comparative claim
+    # about any vendor's tool.
+    repo_ai_assisted_pct: float | None = None
+    cost_per_adoption_point_usd: float | None = None
+    method_note: str = (
+        "Spend is exactly what you entered, normalized to a monthly figure for mixed billing periods. "
+        "Adoption is the AI Contribution Tracker's self-disclosed percentage for the selected repo — "
+        "not a productivity or quality claim, and not a comparison between tools."
+    )

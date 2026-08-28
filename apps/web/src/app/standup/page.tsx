@@ -41,17 +41,17 @@ export default function StandupPage() {
 
       <Card className="mt-8 flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-xs font-semibold text-slate-500">Repo</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">Repo</label>
           <div className="mt-1.5">
             <RepoPicker selectedRepoId={repoId} onChange={setRepoId} />
           </div>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500">GitHub username</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">GitHub username</label>
           <Input className="mt-1.5" value={githubLogin} onChange={(e) => setGithubLogin(e.target.value)} placeholder="octocat" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500">Date</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">Date</label>
           <Input type="date" className="mt-1.5" value={day} onChange={(e) => setDay(e.target.value)} />
         </div>
         <PrimaryButton onClick={handleGenerate} disabled={!repoId || !githubLogin || status === "generating"}>
@@ -72,7 +72,7 @@ export default function StandupPage() {
           />
         )}
         {standups.map((s) => (
-          <Card key={s.id} className="whitespace-pre-wrap text-sm text-slate-700">
+          <Card key={s.id} className="whitespace-pre-wrap text-sm text-[var(--text-muted)]">
             {s.draft_text}
           </Card>
         ))}

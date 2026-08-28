@@ -31,6 +31,36 @@ export type AdminOverview = {
   total_mrr: number;
   open_error_count: number;
   unresolved_flag_count: number;
+  open_contact_message_count: number;
+};
+
+export type PricingPlan = {
+  id: string;
+  tier: string;
+  name: string;
+  price_usd: number;
+  billing_interval: "month" | "year";
+  is_active: boolean;
+  has_stripe_price: boolean;
+  has_paystack_plan: boolean;
+  updated_at: string;
+};
+
+export type PricingPlanUpdate = {
+  name?: string;
+  price_usd?: number;
+  billing_interval?: "month" | "year";
+  is_active?: boolean;
+};
+
+export type ContactMessage = {
+  id: string;
+  name: string;
+  email: string;
+  reason: string;
+  message: string;
+  resolved_at: string | null;
+  created_at: string;
 };
 
 export type AdminWorkspace = {
@@ -159,8 +189,15 @@ export const api = {
   adminListUsers: (search?: string) => apiFetch<AdminUser[]>(`/admin/users${search ? `?search=${encodeURIComponent(search)}` : ""}`),
   adminListErrors: (includeResolved = false) => apiFetch<AdminErrorEvent[]>(`/admin/errors?include_resolved=${includeResolved}`),
   adminResolveError: (errorId: string) => apiFetch<AdminErrorEvent>(`/admin/errors/${errorId}/resolve`, { method: "POST" }),
+  adminListContactMessages: (includeResolved = false) =>
+    apiFetch<ContactMessage[]>(`/admin/contact-messages?include_resolved=${includeResolved}`),
+  adminResolveContactMessage: (messageId: string) =>
+    apiFetch<ContactMessage>(`/admin/contact-messages/${messageId}/resolve`, { method: "POST" }),
   adminListMetrics: (metricName?: string) => apiFetch<AdminSystemMetric[]>(`/admin/metrics${metricName ? `?metric_name=${metricName}` : ""}`),
   adminRevenue: () => apiFetch<AdminRevenue>("/admin/revenue"),
+  listPricingPlans: () => apiFetchNoAuth<PricingPlan[]>("/pricing-plans"),
+  setPricingPlan: (tier: string, payload: PricingPlanUpdate) =>
+    apiFetch<PricingPlan>(`/pricing-plans/${tier}`, { method: "PUT", body: JSON.stringify(payload) }),
   adminListFlags: () => apiFetch<AdminFeatureFlag[]>("/admin/flags"),
   adminCreateFlag: (payload: { key: string; description?: string; enabled_globally?: boolean; min_plan_tier?: string | null }) =>
     apiFetch<AdminFeatureFlag>("/admin/flags", { method: "POST", body: JSON.stringify(payload) }),

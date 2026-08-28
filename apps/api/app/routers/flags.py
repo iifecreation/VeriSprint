@@ -15,8 +15,9 @@ from app.auth.dependencies import ensure_workspace_access, get_internal_user, ge
 from app.db.models import ReconciliationFlag, Repo, User
 from app.db.session import get_db
 from app.schemas import ReconciliationFlagOut
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/flags", tags=["flags"])
+router = APIRouter(prefix="/flags", tags=["flags"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("", response_model=list[ReconciliationFlagOut])

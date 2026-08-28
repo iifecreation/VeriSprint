@@ -10,8 +10,9 @@ from app.db.models import Repo, StandupUpdate
 from app.db.session import get_db
 from app.queue.client import enqueue
 from app.schemas import StandupUpdateOut
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/standup", tags=["standup"])
+router = APIRouter(prefix="/standup", tags=["standup"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("", response_model=list[StandupUpdateOut])

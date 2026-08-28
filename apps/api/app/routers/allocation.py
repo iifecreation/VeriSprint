@@ -13,8 +13,9 @@ from app.auth.dependencies import get_workspace_for_user, require_feature_flag
 from app.db.models import Commit, Repo, Workspace
 from app.db.session import get_db
 from app.schemas import AllocationEntry, AllocationReport
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/allocation", tags=["allocation"])
+router = APIRouter(prefix="/allocation", tags=["allocation"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("", response_model=AllocationReport, dependencies=[Depends(require_feature_flag("investment_allocation"))])

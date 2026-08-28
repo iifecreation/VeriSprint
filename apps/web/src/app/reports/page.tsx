@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type ReportDocument, type Sprint } from "@/lib/api";
+import { api, type ReportDocument, type ReportSectionOption, type Sprint } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
-import { Badge, Card, EmptyState, Input, PageHeader, SecondaryButton } from "@/components/ui";
+import { Badge, Card, EmptyState, Input, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
 
 const STATUS_TONE: Record<ReportDocument["status"], "warning" | "success" | "danger"> = {
   generating: "warning",
@@ -28,6 +28,16 @@ export default function ReportsPage() {
   const [periodStart, setPeriodStart] = useState(daysAgoISO(30));
   const [periodEnd, setPeriodEnd] = useState(todayISO());
   const [busy, setBusy] = useState(false);
+  const [sectionOptions, setSectionOptions] = useState<ReportSectionOption[]>([]);
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+
+  useEffect(() => {
+    api.listCustomReportSections().then(setSectionOptions);
+  }, []);
+
+  function toggleSection(key: string) {
+    setSelectedSections((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  }
 
   async function refresh() {
     if (!repoId) return;
@@ -63,11 +73,11 @@ export default function ReportsPage() {
 
       <Card className="mt-8 flex flex-wrap items-end gap-3">
         <div>
-          <label className="block text-xs font-semibold text-slate-500">Period start</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">Period start</label>
           <Input type="date" className="mt-1.5" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500">Period end</label>
+          <label className="block text-xs font-semibold text-[var(--text-dim)]">Period end</label>
           <Input type="date" className="mt-1.5" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
         </div>
         <SecondaryButton disabled={!repoId || busy} onClick={() => withBusy(() => api.generateInvestorUpdate(repoId!, isoStart, isoEnd))}>
@@ -86,6 +96,37 @@ export default function ReportsPage() {
         )}
       </Card>
 
+      <Card className="mt-6">
+        <h2 className="font-semibold text-[var(--foreground)]">Report Builder</h2>
+        <p className="mt-1 text-xs text-[var(--text-dim)]">
+          Pick exactly which real sections go in — no LLM rewrite, each section is computed directly from the same
+          data as its standalone report.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {sectionOptions.map((s) => (
+            <label key={s.key} className="flex cursor-pointer items-start gap-2 rounded-lg border border-[var(--line)] p-2.5 text-sm hover:bg-[var(--background)]">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={selectedSections.includes(s.key)}
+                onChange={() => toggleSection(s.key)}
+              />
+              <span>
+                <span className="font-medium text-[var(--text-muted)]">{s.label}</span>
+                <span className="block text-xs text-[var(--text-dim)]">{s.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <PrimaryButton
+          className="mt-3"
+          disabled={!repoId || busy || selectedSections.length === 0}
+          onClick={() => withBusy(() => api.generateCustomReport(repoId!, isoStart, isoEnd, selectedSections))}
+        >
+          Build report
+        </PrimaryButton>
+      </Card>
+
       <div className="mt-8 space-y-3">
         {reports.length === 0 && <EmptyState title="No reports generated yet" />}
         {reports.map((r) => (
@@ -93,18 +134,18 @@ export default function ReportsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <Badge>{r.report_type.replace(/_/g, " ")}</Badge>
-                <h3 className="mt-1.5 font-semibold text-slate-900">{r.title}</h3>
+                <h3 className="mt-1.5 font-semibold text-[var(--foreground)]">{r.title}</h3>
               </div>
               <div className="flex items-center gap-2">
                 {r.report_type === "client_portal" && r.share_token && (
-                  <a href={`/portal/${r.share_token}`} target="_blank" className="text-xs font-medium text-[#3f6212] hover:underline">
+                  <a href={`/portal/${r.share_token}`} target="_blank" className="text-xs font-medium text-brand hover:underline">
                     Public link ↗
                   </a>
                 )}
                 <Badge tone={STATUS_TONE[r.status]}>{r.status}</Badge>
               </div>
             </div>
-            {r.status === "ready" && <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{r.summary_text}</p>}
+            {r.status === "ready" && <p className="mt-3 whitespace-pre-wrap text-sm text-[var(--text-muted)]">{r.summary_text}</p>}
             {r.status === "failed" && (
               <p className="mt-3 text-sm text-rose-600">Generation failed — check the worker logs (likely a missing ANTHROPIC_API_KEY).</p>
             )}

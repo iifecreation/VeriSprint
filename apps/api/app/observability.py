@@ -1,6 +1,7 @@
 """
 Error + metrics pipeline (spec Section 7): the actual data source behind the
-Super-Admin Dashboard's error monitoring and system-health panels. Two halves:
+Super-Admin Dashboard's error monitoring and system-health panels. Three
+pieces:
 
   - `record_error` / `capture_worker_errors` — every ingestion failure, LLM
     timeout, failed webhook delivery, and unhandled API exception lands a real
@@ -8,6 +9,13 @@ Super-Admin Dashboard's error monitoring and system-health panels. Two halves:
     registration time (see `app/queue/worker.py`) so no individual job needs
     to remember to call this itself; the API side is wired via a global
     exception handler in `app/main.py`.
+  - `_maybe_alert` — a real-time email alert on top of that, not a substitute
+    for it: a passive dashboard panel only helps if someone happens to be
+    looking at it, so error/critical severity also best-effort emails
+    OPERATOR_ALERT_EMAIL. Throttled per `source` via Redis (SET NX EX) so a
+    repeating failure (e.g. Redis itself down, or a bad deploy) sends one
+    email per cooldown window, not one per occurrence — every occurrence
+    still lands its own ErrorEvent row regardless of whether the email fired.
   - `record_metric` — a thin helper for `SystemMetric` time-series points
     (queue depth, LLM call latency/cost, webhook delivery status). Cron-driven
     collection lives in `app/workers/scheduler.py`.
@@ -22,13 +30,69 @@ from collections.abc import Awaitable, Callable
 from typing import ParamSpec, TypeVar
 from uuid import UUID
 
+import redis.asyncio as redis
+
+from app.config import get_settings
 from app.db.models import ErrorEvent, ErrorSeverity, SystemMetric
 from app.db.session import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 P = ParamSpec("P")
 T = TypeVar("T")
+
+_redis_client: redis.Redis | None = None
+# CRITICAL alerts every time (rare by construction); ERROR is throttled to
+# at most one email per source per window so a repeating failure doesn't
+# flood the inbox — the dashboard still shows every individual occurrence.
+_ALERT_COOLDOWN_SECONDS = {ErrorSeverity.ERROR: 900, ErrorSeverity.CRITICAL: 0}
+
+
+def _client() -> redis.Redis:
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = redis.from_url(get_settings().redis_url, decode_responses=True)
+    return _redis_client
+
+
+async def _maybe_alert(*, source: str, message: str, severity: ErrorSeverity) -> None:
+    """Best-effort — never raises, never blocks recording the ErrorEvent
+    itself. Silently no-ops if neither RESEND_API_KEY nor an alert address
+    is configured, same "degrade, don't break" discipline as the rest of
+    this module's optional integrations."""
+    if severity not in (ErrorSeverity.ERROR, ErrorSeverity.CRITICAL):
+        return
+    to_address = settings.operator_alert_email or settings.contact_notify_email
+    if not to_address or not settings.resend_api_key:
+        return
+
+    cooldown = _ALERT_COOLDOWN_SECONDS[severity]
+    if cooldown:
+        try:
+            throttle_key = f"error-alert-cooldown:{source}:{severity.value}"
+            # SET ... NX EX — atomically "claim" this cooldown window; only
+            # the caller that actually sets the key sends the email.
+            claimed = await _client().set(throttle_key, "1", nx=True, ex=cooldown)
+            if not claimed:
+                return
+        except Exception:
+            logger.warning("Alert throttle check failed — sending anyway rather than staying silent", exc_info=True)
+
+    try:
+        from app.integrations.email_client import send_email  # local import avoids a circular module load
+
+        send_email(
+            to=to_address,
+            subject=f"[VeriSprint] {severity.value.upper()} in {source}",
+            text=(
+                f"A {severity.value} was just recorded on VeriSprint.\n\n"
+                f"Source: {source}\nMessage: {message[:1000]}\n\n"
+                "Full detail (including any earlier occurrences) is in the Operator Console -> Errors panel."
+            ),
+        )
+    except Exception:
+        logger.warning("Failed to send error alert email for source=%s", source, exc_info=True)
 
 
 async def record_error(
@@ -53,6 +117,8 @@ async def record_error(
             await db.commit()
     except Exception:
         logger.exception("Failed to record ErrorEvent (source=%s) — swallowing so the original error still propagates", source)
+
+    await _maybe_alert(source=source, message=message, severity=severity)
 
 
 async def record_metric(*, metric_name: str, value: float, workspace_id: UUID | None = None) -> None:

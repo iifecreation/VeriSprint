@@ -16,8 +16,9 @@ from app.auth.dependencies import get_repo_for_user, require_feature_flag
 from app.db.models import Commit, Repo, Ticket, Workspace
 from app.db.session import get_db
 from app.schemas import CapitalizationEntry, CapitalizationReport
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/capitalization", tags=["capitalization"])
+router = APIRouter(prefix="/capitalization", tags=["capitalization"], dependencies=[Depends(require_active_access)])
 
 # Real, transparent keyword classification — not an LLM guess.
 _MAINTENANCE_KEYWORDS = ("bug", "fix", "hotfix", "chore", "patch", "regression")

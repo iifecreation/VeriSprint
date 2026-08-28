@@ -87,7 +87,10 @@ change them.
 cd apps/api
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-cp ../../.env.example ../../.env   # then fill in ANTHROPIC_API_KEY at minimum
+cp ../../.env.example .env   # NOT ../../.env — Settings() reads ".env" relative to
+                              # this process's CWD (apps/api), confirmed empirically;
+                              # a .env at the repo root is silently ignored once you
+                              # `cd apps/api` to run uvicorn, no error either way.
 alembic upgrade head
 uvicorn app.main:app --reload --port 58000
 ```
@@ -124,6 +127,21 @@ npm run dev -- --port 53100
 Visit http://localhost:53100. This is a content-only site (no login, no
 database access) — its "Connect a GitHub repo" and "Sign in" links point at
 the API's install flow and the dashboard app's `/login` respectively.
+
+**5. Operator console (`apps/admin`, separate app — `super_admin` only)**
+
+```bash
+cd apps/admin
+npm install
+echo "NEXT_PUBLIC_API_BASE_URL=http://localhost:58000" > .env.local
+echo "NEXT_PUBLIC_APP_URL=http://localhost:53000" >> .env.local
+npm run dev -- --port 53200
+```
+
+Visit http://localhost:53200 and sign in as `superadmin@verisprint.dev` (see
+test accounts below). This is where FeatureFlags get toggled, contact-form
+messages and errors get triaged, and cross-tenant workspace/billing state
+lives.
 
 ## Auth & RBAC (v3)
 
@@ -310,3 +328,44 @@ toggle from `apps/admin` → Flags to see their panels light up across
 15 min per email plus 20/5 min per IP; 3 reset requests / hour per email
 plus 5/hour per IP) and fail *open* if Redis is unreachable, so a limiter
 outage degrades to "unprotected," not "logins are down."
+
+**Getting a working session without a known password:** mint a token pair
+directly against the real `app.auth.security` signer instead of resetting a
+password — this is how every backend feature in this repo has actually been
+exercised locally:
+
+```bash
+cd apps/api && source .venv/bin/activate
+python - <<'EOF'
+import asyncio
+from app.db.session import AsyncSessionLocal
+from app.db.models import User
+from app.auth.security import create_token_pair
+from sqlalchemy import select
+
+async def main():
+    async with AsyncSessionLocal() as db:
+        user = (await db.execute(select(User).where(User.email == "wsadmin@example.com"))).scalar_one()
+        pair = create_token_pair(user_id=user.id, workspace_id=user.workspace_id, role=user.role.value, token_version=user.token_version)
+        print("access:", pair["access_token"])
+        print("refresh:", pair["refresh_token"])
+
+asyncio.run(main())
+EOF
+```
+
+Access tokens expire in 15 minutes — swap the email and re-run to mint a
+fresh one, or a different role's token. To use one in the browser instead of
+curl, set it into the app's own `localStorage` keys from the browser console
+(`verisprint_access_token`/`verisprint_refresh_token` for `apps/web`,
+`verisprint_admin_access_token`/`verisprint_admin_refresh_token` for
+`apps/admin`) and reload.
+
+**There is no automated test suite yet.** `apps/api/tests/` exists (pytest +
+pytest-asyncio are dev dependencies) but is currently empty, and none of the
+three frontend apps have a test runner configured (`package.json` has no
+`test` script). Every feature in this codebase has instead been verified by
+hand against the real running stack above — curl/live DB queries for the
+API, and real clicks against the dev server for the UI — not by an
+automated suite. If you want repeatable local tests, this is the environment
+to write them against; there's no existing `npm test`/`pytest` to reach for yet.

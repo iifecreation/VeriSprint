@@ -14,8 +14,9 @@ from app.auth.dependencies import ensure_workspace_access, get_internal_user, ge
 from app.db.models import Commit, EvidenceItem, PullRequest, Repo, User
 from app.db.session import get_db
 from app.schemas import PRAutoRouteResult, PullRequestOut, ReviewerSuggestion
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/pr-autoroute", tags=["pr-autoroute"])
+router = APIRouter(prefix="/pr-autoroute", tags=["pr-autoroute"], dependencies=[Depends(require_active_access)])
 
 LOOKBACK_REVIEWERS_PER_FILE = 3
 

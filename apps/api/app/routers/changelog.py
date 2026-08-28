@@ -10,8 +10,9 @@ from app.auth.dependencies import get_repo_for_user, require_feature_flag
 from app.db.models import Commit, PullRequest, Repo
 from app.db.session import get_db
 from app.schemas import ChangelogDay
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/changelog", tags=["changelog"])
+router = APIRouter(prefix="/changelog", tags=["changelog"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("", response_model=list[ChangelogDay], dependencies=[Depends(require_feature_flag("visual_changelog"))])

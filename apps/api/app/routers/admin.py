@@ -17,6 +17,7 @@ from app.audit import record_audit_for_user
 from app.auth.dependencies import require_role
 from app.db.models import (
     AuditLogEntry,
+    ContactMessage,
     ErrorEvent,
     FeatureFlag,
     ReconciliationFlag,
@@ -35,6 +36,7 @@ from app.schemas import (
     AdminWorkspaceOut,
     AdminWorkspaceUpdate,
     AuditLogEntryOut,
+    ContactMessageOut,
     ErrorEventOut,
     FeatureFlagCreate,
     FeatureFlagOut,
@@ -66,6 +68,9 @@ async def get_overview(
     unresolved_flag_count = await db.scalar(
         select(func.count()).select_from(ReconciliationFlag).where(ReconciliationFlag.is_resolved.is_(False))
     )
+    open_contact_message_count = await db.scalar(
+        select(func.count()).select_from(ContactMessage).where(ContactMessage.resolved_at.is_(None))
+    )
     return AdminOverview(
         workspace_count=workspace_count or 0,
         active_workspace_count=active_workspace_count or 0,
@@ -73,6 +78,7 @@ async def get_overview(
         total_mrr=float(total_mrr or 0.0),
         open_error_count=open_error_count or 0,
         unresolved_flag_count=unresolved_flag_count or 0,
+        open_contact_message_count=open_contact_message_count or 0,
     )
 
 
@@ -234,6 +240,40 @@ async def resolve_error(
     await db.commit()
     await db.refresh(error)
     return error
+
+
+# --- Panel 9: contact messages -------------------------------------------------
+
+@router.get("/contact-messages", response_model=list[ContactMessageOut])
+async def list_contact_messages(
+    include_resolved: bool = False,
+    limit: int = 200,
+    admin: User = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+) -> list[ContactMessage]:
+    stmt = select(ContactMessage).order_by(ContactMessage.created_at.desc())
+    if not include_resolved:
+        stmt = stmt.where(ContactMessage.resolved_at.is_(None))
+    result = await db.execute(stmt.limit(min(limit, 1000)))
+    return list(result.scalars().all())
+
+
+@router.post("/contact-messages/{message_id}/resolve", response_model=ContactMessageOut)
+async def resolve_contact_message(
+    message_id: UUID, admin: User = Depends(_require_super_admin), db: AsyncSession = Depends(get_db)
+) -> ContactMessage:
+    message = await db.get(ContactMessage, message_id)
+    if message is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+    message.resolved_at = datetime.now(timezone.utc)
+    message.resolved_by_user_id = admin.id
+    await db.flush()
+    await record_audit_for_user(
+        db, user=admin, action="admin.contact_message_resolved", entity_type="contact_message", entity_id=str(message.id),
+    )
+    await db.commit()
+    await db.refresh(message)
+    return message
 
 
 # --- Panel 5: system health ---------------------------------------------------

@@ -3,6 +3,7 @@ import { PageHeader, Section, FAQSection } from "@/components/ui";
 import { INSTALL_URL } from "@/lib/config";
 import Link from "next/link";
 import { DotPattern } from "@/components/magicui/dot-pattern";
+import { HeroBackground } from "@/components/HeroBackground";
 import { ShimmerButton } from "@/components/magicui/shimmer-button";
 import { Reveal } from "@/components/Reveal";
 import { PipelineTimeline } from "@/components/PipelineTimeline";
@@ -46,10 +47,17 @@ const PIPELINE = [
 export default function HowItWorksPage() {
   return (
     <>
-      <Section variant="default" className="bg-slate-50 pb-16 pt-20 border-b border-slate-200 relative overflow-hidden">
-        <DotPattern className="opacity-60" />
+      <Section
+        variant="default"
+        className="bg-[var(--background)] pb-16 border-b border-[var(--line)] relative overflow-hidden"
+        background={
+          <>
+            <HeroBackground />
+            <DotPattern className="opacity-40" />
+          </>
+        }
+      >
         <PageHeader
-          eyebrow="Under the hood"
           title="From a git push to a defensible Confidence Score."
           subtitle="No step in this pipeline invents data. A failure at any stage surfaces honestly — as a missing score or a visible error — instead of producing a plausible-looking fallback."
         />
@@ -64,26 +72,26 @@ export default function HowItWorksPage() {
       {/* Proof of mechanism — a real example, not decoration. Shows the
           actual shape of an Evidence Item and how it rolls up into a score,
           the single highest-leverage visual for an evidence-first pitch. */}
-      <Section variant="default" className="bg-slate-50 border-y border-slate-200">
+      <Section variant="default" className="bg-[var(--background)] border-y border-[var(--line)]">
         <Reveal className="mx-auto max-w-3xl text-center mb-12">
           <p className="text-sm font-semibold uppercase tracking-wider font-mono text-brand mb-3">A real example</p>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight sm:text-4xl">One ticket, from commit to score</h2>
-          <p className="mt-4 text-slate-600 text-lg">Not a mockup of made-up numbers — this is the actual shape of the data at each stage.</p>
+          <h2 className="text-3xl font-bold text-[var(--foreground)] tracking-tight sm:text-4xl">One ticket, from commit to score</h2>
+          <p className="mt-4 text-[var(--text-muted)] text-lg">Not a mockup of made-up numbers — this is the actual shape of the data at each stage.</p>
         </Reveal>
         <Reveal className="mx-auto max-w-3xl">
-          <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden font-mono text-sm">
-            <div className="bg-slate-900 text-slate-200 px-5 py-3">git push → webhook → ingestion queue</div>
-            <div className="border-b border-slate-100 px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Evidence Item #1</p>
-              <p className="text-slate-700">kind: test_added · file: api_handler.go:88–104 · ticket: ENG-409</p>
+          <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-md overflow-hidden font-mono text-sm">
+            <div className="bg-[var(--background)] text-[var(--text-muted)] px-5 py-3">git push → webhook → ingestion queue</div>
+            <div className="border-b border-[var(--line)] px-5 py-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)] mb-2">Evidence Item #1</p>
+              <p className="text-[var(--text-muted)]">kind: test_added · file: api_handler.go:88–104 · ticket: ENG-409</p>
             </div>
-            <div className="border-b border-slate-100 px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Evidence Item #2</p>
-              <p className="text-slate-700">kind: todo_unresolved · file: api_handler.go:142 · ticket: ENG-409</p>
+            <div className="border-b border-[var(--line)] px-5 py-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)] mb-2">Evidence Item #2</p>
+              <p className="text-[var(--text-muted)]">kind: todo_unresolved · file: api_handler.go:142 · ticket: ENG-409</p>
             </div>
             <div className="px-5 py-4 bg-[var(--accent-neon)]/5">
               <p className="text-xs font-semibold uppercase tracking-wider text-brand mb-2">Confidence Score → ENG-409</p>
-              <p className="text-slate-900 font-semibold">78 / 100 — &ldquo;Tests added for the new endpoint, but a TODO on the error-handling branch is still open.&rdquo;</p>
+              <p className="text-[var(--foreground)] font-semibold">78 / 100 — &ldquo;Tests added for the new endpoint, but a TODO on the error-handling branch is still open.&rdquo;</p>
             </div>
           </div>
         </Reveal>
@@ -93,7 +101,7 @@ export default function HowItWorksPage() {
       <Section variant="default">
         <Reveal className="mx-auto max-w-3xl text-center mb-12">
           <p className="text-sm font-semibold uppercase tracking-wider font-mono text-brand mb-3">Questions about the pipeline</p>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight sm:text-4xl">How it actually runs</h2>
+          <h2 className="text-3xl font-bold text-[var(--foreground)] tracking-tight sm:text-4xl">How it actually runs</h2>
         </Reveal>
         <FAQSection
           items={[
@@ -113,13 +121,13 @@ export default function HowItWorksPage() {
         />
       </Section>
 
-      <Section variant="default" className="bg-slate-50 border-t border-slate-200">
+      <Section variant="default" className="bg-[var(--background)] border-t border-[var(--line)]">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">See it on your own repo</h2>
-          <p className="mt-4 text-slate-600 text-lg">Connect a repo and the first evidence starts appearing on the next push.</p>
+          <h2 className="text-3xl font-bold text-[var(--foreground)] tracking-tight">See it on your own repo</h2>
+          <p className="mt-4 text-[var(--text-muted)] text-lg">Connect a repo and the first evidence starts appearing on the next push.</p>
           <div className="mt-8 flex justify-center">
             <Link href={INSTALL_URL} className="inline-block">
-              <ShimmerButton background="#001666" className="text-lg px-8 py-2">Connect a GitHub repo</ShimmerButton>
+              <ShimmerButton background="#4fb8c4" className="text-lg px-8 py-2">Connect a GitHub repo</ShimmerButton>
             </Link>
           </div>
         </Reveal>

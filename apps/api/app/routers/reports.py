@@ -16,9 +16,34 @@ from app.auth.dependencies import ensure_workspace_access, get_internal_user, ge
 from app.db.models import ClientPortalLink, Repo, ReportDocument, ReportType, Sprint, User
 from app.db.session import get_db
 from app.queue.client import enqueue
-from app.schemas import GenerateReportRequest, ReportDocumentOut
+from app.schemas import GenerateCustomReportRequest, GenerateReportRequest, ReportDocumentOut, ReportSectionOption
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/reports", tags=["reports"])
+router = APIRouter(prefix="/reports", tags=["reports"], dependencies=[Depends(require_active_access)])
+
+# Report Builder's real, deterministically-computed sections (see
+# app/workers/reports.py's `generate_custom_report`) — each one pulls from
+# an existing, already-shipped feature's own data, never a new metric
+# invented just for this list.
+CUSTOM_REPORT_SECTIONS: list[ReportSectionOption] = [
+    ReportSectionOption(
+        key="shipped_activity", label="Shipped Activity",
+        description="Real commits and their evidence-backed summaries in the selected period.",
+    ),
+    ReportSectionOption(
+        key="cost_capitalization", label="Cost Capitalization",
+        description="Capitalizable new development vs. non-capitalizable maintenance split, same as the Cost Capitalization report.",
+    ),
+    ReportSectionOption(
+        key="ai_contribution", label="AI Contribution",
+        description="Self-disclosed AI-assisted commit percentage, same signal as the AI Contribution Tracker.",
+    ),
+    ReportSectionOption(
+        key="ai_tool_cost", label="AI Tool Spend",
+        description="Current active AI coding tool subscriptions and their normalized monthly cost.",
+    ),
+]
+_VALID_SECTION_KEYS = {s.key for s in CUSTOM_REPORT_SECTIONS}
 
 
 async def _repo_for_payload(payload: GenerateReportRequest, user: User, db: AsyncSession) -> Repo:
@@ -50,6 +75,47 @@ async def get_report(
     repo = await db.get(Repo, report.repo_id)
     if repo is not None:
         ensure_workspace_access(user, repo.workspace_id)
+    return report
+
+
+@router.get("/custom/sections", response_model=list[ReportSectionOption])
+async def list_custom_report_sections(user: User = Depends(get_internal_user)) -> list[ReportSectionOption]:
+    return CUSTOM_REPORT_SECTIONS
+
+
+@router.post("/custom", response_model=ReportDocumentOut)
+async def generate_custom_report(
+    payload: GenerateCustomReportRequest, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
+) -> ReportDocument:
+    repo = await db.get(Repo, payload.repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="Repo not found")
+    ensure_workspace_access(user, repo.workspace_id)
+
+    unknown = [s for s in payload.sections if s not in _VALID_SECTION_KEYS]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown section(s): {', '.join(unknown)}")
+    if payload.period_end < payload.period_start:
+        raise HTTPException(status_code=400, detail="period_end can't be before period_start")
+
+    report = ReportDocument(
+        repo_id=payload.repo_id,
+        report_type=ReportType.CUSTOM,
+        period_start=payload.period_start,
+        period_end=payload.period_end,
+        title=payload.title or f"Custom Report: {payload.period_start.date()} to {payload.period_end.date()}",
+        status="generating",
+        custom_sections=payload.sections,
+    )
+    db.add(report)
+    await db.flush()  # populate report.id (client-side uuid4 default) for the audit entry
+    await record_audit_for_user(
+        db, user=user, action="report.generated", entity_type="report_document", entity_id=str(report.id),
+        repo_id=payload.repo_id, after={"report_type": report.report_type.value, "sections": payload.sections},
+    )
+    await db.commit()
+    await db.refresh(report)
+    await enqueue("generate_custom_report", str(payload.repo_id), str(report.id))
     return report
 
 

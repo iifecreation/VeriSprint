@@ -9,22 +9,24 @@ Per the confirmed approach for third-party billing: this is real, correct
 SDK usage against Stripe's actual API shapes — verified everywhere possible
 without live keys (webhook signature rejection, request construction). Live
 checkout/webhook delivery needs a real STRIPE_SECRET_KEY /
-STRIPE_WEBHOOK_SECRET / STRIPE_PRICE_ID_* to actually exercise end to end.
+STRIPE_WEBHOOK_SECRET to actually exercise end to end.
+
+Prices are no longer static STRIPE_PRICE_ID_* env vars — see
+app/db/models.py::PricingPlan and app/routers/pricing.py. A Super Admin
+editing a price there is what creates/rotates the actual Stripe Price
+object; this module just reads whatever PricingPlan.stripe_price_id
+currently points at.
 """
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 import stripe
 
 from app.config import get_settings
-from app.db.models import WorkspacePlanTier
+from app.db.models import PricingPlan, WorkspacePlanTier
 
 settings = get_settings()
 stripe.api_key = settings.stripe_secret_key
-
-PRICE_ID_BY_PLAN_TIER: dict[WorkspacePlanTier, str] = {
-    WorkspacePlanTier.TEAM: settings.stripe_price_id_team,
-    WorkspacePlanTier.GROWTH: settings.stripe_price_id_growth,
-    WorkspacePlanTier.AGENCY: settings.stripe_price_id_agency,
-}
-PLAN_TIER_BY_PRICE_ID: dict[str, WorkspacePlanTier] = {v: k for k, v in PRICE_ID_BY_PLAN_TIER.items() if v}
 
 
 class StripeNotConfigured(Exception):
@@ -36,19 +38,45 @@ def _require_configured() -> None:
         raise StripeNotConfigured("STRIPE_SECRET_KEY is not configured — billing is unavailable")
 
 
-def price_id_for_plan_tier(plan_tier: WorkspacePlanTier) -> str:
-    price_id = PRICE_ID_BY_PLAN_TIER.get(plan_tier)
-    if not price_id:
-        raise ValueError(f"No Stripe price configured for plan tier {plan_tier.value} (self-serve tiers: team/growth/agency)")
-    return price_id
+async def price_id_for_plan_tier(db: AsyncSession, plan_tier: WorkspacePlanTier) -> str:
+    result = await db.execute(select(PricingPlan).where(PricingPlan.tier == plan_tier, PricingPlan.is_active.is_(True)))
+    plan = result.scalar_one_or_none()
+    if plan is None or not plan.stripe_price_id:
+        raise ValueError(
+            f"No Stripe price configured for plan tier {plan_tier.value} — set one from the Operator "
+            "Console's Pricing panel (self-serve tiers: team/growth/agency)"
+        )
+    return plan.stripe_price_id
 
 
-def plan_tier_for_price_id(price_id: str) -> WorkspacePlanTier | None:
-    return PLAN_TIER_BY_PRICE_ID.get(price_id)
+async def plan_tier_for_price_id(db: AsyncSession, price_id: str) -> WorkspacePlanTier | None:
+    result = await db.execute(select(PricingPlan).where(PricingPlan.stripe_price_id == price_id))
+    plan = result.scalar_one_or_none()
+    return plan.tier if plan else None
+
+
+def create_stripe_price(*, name: str, amount_usd: float, interval: str) -> str:
+    """Creates a brand-new Stripe Product+Price in one call (Price.create's
+    inline `product_data` implicitly creates the Product too) and returns
+    the new price's id. Called only from app/routers/pricing.py when a
+    Super Admin sets or changes a tier's price — never called per-checkout.
+    Stripe Prices are immutable once created, which is exactly the
+    "existing subscribers keep their old price" guarantee PricingPlan's
+    docstring describes; this function embraces that by always creating a
+    new one rather than trying to mutate anything."""
+    _require_configured()
+    price = stripe.Price.create(
+        unit_amount=round(amount_usd * 100),
+        currency="usd",
+        recurring={"interval": interval},
+        product_data={"name": f"VeriSprint {name}"},
+    )
+    return price.id
 
 
 def create_checkout_session(
     *,
+    price_id: str,
     plan_tier: WorkspacePlanTier,
     workspace_id: str,
     customer_id: str | None,
@@ -57,7 +85,6 @@ def create_checkout_session(
     cancel_url: str,
 ) -> stripe.checkout.Session:
     _require_configured()
-    price_id = price_id_for_plan_tier(plan_tier)
 
     params: dict = {
         "mode": "subscription",

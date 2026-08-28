@@ -16,7 +16,7 @@ export function MagicCard({
   children,
   className,
   gradientSize = 200,
-  gradientColor = "#38bdf8",
+  gradientColor = "#4fb8c4",
   gradientOpacity = 0.1,
   ...props
 }: MagicCardProps) {
@@ -48,7 +48,7 @@ export function MagicCard({
       onMouseMove={handleMouseMove}
       onMouseOut={handleMouseOut}
       className={cn(
-        "group relative flex h-full w-full overflow-hidden rounded-xl bg-white border border-slate-200 transition-all hover:shadow-md",
+        "group relative flex h-full w-full overflow-hidden rounded-xl bg-[var(--surface)] border border-[var(--line)] transition-all hover:shadow-md",
         className
       )}
       {...props}

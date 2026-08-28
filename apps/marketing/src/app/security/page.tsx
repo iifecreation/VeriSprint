@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader, Section } from "@/components/ui";
 import { CONTACT_EMAIL } from "@/lib/config";
 import { DotPattern } from "@/components/magicui/dot-pattern";
+import { HeroBackground } from "@/components/HeroBackground";
 import { MagicCard } from "@/components/magicui/magic-card";
 import { Reveal, RevealGroup, RevealItem } from "@/components/Reveal";
 import { Eye, Building2, ShieldCheck, ScrollText, ServerCog, KeyRound } from "lucide-react";
@@ -44,35 +45,42 @@ const PRINCIPLES = [
 export default function SecurityPage() {
   return (
     <>
-      <Section variant="default" className="bg-slate-50 pb-16 pt-20 border-b border-slate-200 relative overflow-hidden">
-        <DotPattern className="opacity-60" />
+      <Section
+        variant="default"
+        className="bg-[var(--background)] pb-16 border-b border-[var(--line)] relative overflow-hidden"
+        background={
+          <>
+            <HeroBackground />
+            <DotPattern className="opacity-40" />
+          </>
+        }
+      >
         <PageHeader
-          eyebrow="Security & Trust"
           title="Built to be trusted with your commit history."
           subtitle="We're an early-access product and don't yet hold formal certifications like SOC 2 — here's exactly what the architecture does today, plainly stated."
         />
       </Section>
-      <Section className="bg-slate-50">
+      <Section className="bg-[var(--background)]">
         <RevealGroup className="mx-auto max-w-5xl grid gap-6 sm:grid-cols-2">
           {PRINCIPLES.map((p) => (
             <RevealItem key={p.title}>
-              <MagicCard className="flex h-full flex-col bg-white shadow-sm">
-                <div className="w-12 h-12 rounded-lg bg-blue-50 border border-slate-200 flex items-center justify-center mb-5 text-brand">
+              <MagicCard className="flex h-full flex-col bg-[var(--surface)] shadow-sm">
+                <div className="w-12 h-12 rounded-lg bg-[var(--accent-neon)]/10 border border-[var(--line)] flex items-center justify-center mb-5 text-brand">
                   <p.icon className="h-6 w-6" strokeWidth={2} />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">{p.title}</h3>
-                <p className="text-sm text-slate-600 leading-relaxed">{p.body}</p>
+                <h3 className="text-lg font-bold text-[var(--foreground)] mb-2">{p.title}</h3>
+                <p className="text-sm text-[var(--text-muted)] leading-relaxed">{p.body}</p>
               </MagicCard>
             </RevealItem>
           ))}
         </RevealGroup>
       </Section>
-      <Section variant="default" className="bg-slate-50 border-t border-slate-200">
+      <Section variant="default" className="bg-[var(--background)] border-t border-[var(--line)]">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Have a security question?</h2>
-          <p className="mt-4 text-slate-600 text-lg">
+          <h2 className="text-3xl font-bold text-[var(--foreground)] tracking-tight">Have a security question?</h2>
+          <p className="mt-4 text-[var(--text-muted)] text-lg">
             Reach our team directly at{" "}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-brand hover:text-blue-600 transition-colors">
+            <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-brand hover:text-brand transition-colors">
               {CONTACT_EMAIL}
             </a>
             .

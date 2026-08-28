@@ -20,8 +20,9 @@ from app.auth.dependencies import get_repo_for_user
 from app.db.models import ConfidenceScore, ReconciliationFlag, Repo, Ticket
 from app.db.session import get_db
 from app.schemas import AccuracyPoint
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/accuracy", tags=["accuracy"])
+router = APIRouter(prefix="/accuracy", tags=["accuracy"], dependencies=[Depends(require_active_access)])
 
 ACCURATE_SCORE_THRESHOLD = 70
 

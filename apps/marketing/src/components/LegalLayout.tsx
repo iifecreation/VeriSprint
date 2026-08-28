@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { PageHeader, Section } from "@/components/ui";
 import { CONTACT_EMAIL } from "@/lib/config";
+import { HeroBackground } from "@/components/HeroBackground";
 
 export function LegalLayout({
   eyebrow,
@@ -15,13 +16,17 @@ export function LegalLayout({
 }) {
   return (
     <>
-      <Section variant="default" className="bg-slate-50 pb-12 pt-20 border-b border-slate-200">
-        <PageHeader eyebrow={eyebrow} title={title} />
-        <p className="mx-auto -mt-2 max-w-2xl text-center text-sm text-slate-500">Effective {effectiveDate}</p>
+      <Section
+        variant="default"
+        className="bg-[var(--background)] pb-12 pt-20 border-b border-[var(--line)]"
+        background={<HeroBackground />}
+      >
+        <PageHeader title={title} />
+        <p className="mx-auto -mt-2 max-w-2xl text-center text-sm text-[var(--text-dim)]">Effective {effectiveDate}</p>
       </Section>
       <Section>
-        <div className="mx-auto max-w-3xl space-y-8 text-base leading-relaxed text-slate-700 [&_h2]:mt-10 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-slate-900 [&_h2]:mb-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-2 [&_p]:leading-relaxed">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+        <div className="mx-auto max-w-3xl space-y-8 text-base leading-relaxed text-[var(--text-muted)] [&_h2]:mt-10 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-[var(--foreground)] [&_h2]:mb-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-2 [&_p]:leading-relaxed">
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/15 p-5 text-sm text-amber-400">
             <strong>Early-access notice:</strong> VeriSprint is a small, independent project, not an established
             company with in-house legal counsel — see{" "}
             <a href="/about" className="underline">

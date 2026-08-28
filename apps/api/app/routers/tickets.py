@@ -19,8 +19,9 @@ from app.db.models import ConfidenceScore, EvidenceItem, Repo, ReconciliationFla
 from app.db.session import get_db
 from app.queue.client import enqueue
 from app.schemas import ImpactMapEntry, TicketCreate, TicketOut, TicketUpdate
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/tickets", tags=["tickets"])
+router = APIRouter(prefix="/tickets", tags=["tickets"], dependencies=[Depends(require_active_access)])
 
 
 async def _ticket_for_user(

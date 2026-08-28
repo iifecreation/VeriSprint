@@ -31,10 +31,10 @@ export default function AuditPage() {
         {entries.map((e) => (
           <Card key={e.id} className="py-3.5">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-900">{e.action}</span>
-              <span className="text-xs text-slate-400">{new Date(e.created_at).toLocaleString()}</span>
+              <span className="font-semibold text-[var(--foreground)]">{e.action}</span>
+              <span className="text-xs text-[var(--text-dim)]">{new Date(e.created_at).toLocaleString()}</span>
             </div>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-[var(--text-dim)]">
               {e.actor} · {e.entity_type} {e.entity_id.slice(0, 8)}
             </p>
           </Card>

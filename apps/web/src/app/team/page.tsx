@@ -29,7 +29,7 @@ export default function TeamPage() {
 
       {enabled === false && (
         <Card className="mt-8">
-          <p className="text-sm text-slate-500">Not enabled for your workspace — a Super Admin can turn this on from the Operator Console.</p>
+          <p className="text-sm text-[var(--text-dim)]">Not enabled for your workspace — a Super Admin can turn this on from the Operator Console.</p>
         </Card>
       )}
 
@@ -41,7 +41,7 @@ export default function TeamPage() {
       )}
 
       {enabled && !workspaceId && (
-        <p className="mt-8 text-sm text-slate-400">Sign in to a workspace to view this page.</p>
+        <p className="mt-8 text-sm text-[var(--text-dim)]">Sign in to a workspace to view this page.</p>
       )}
     </div>
   );
@@ -87,13 +87,13 @@ function PulseSurveysSection({ workspaceId, canManage }: { workspaceId: string; 
 
   return (
     <section>
-      <h2 className="text-lg font-bold text-slate-900">Pulse surveys</h2>
-      <p className="mt-1 text-sm text-slate-500">Responses are genuinely anonymous — no name is ever attached, even in the audit trail.</p>
+      <h2 className="text-lg font-bold text-[var(--foreground)]">Pulse surveys</h2>
+      <p className="mt-1 text-sm text-[var(--text-dim)]">Responses are genuinely anonymous — no name is ever attached, even in the audit trail.</p>
 
       {canManage && (
         <Card className="mt-4 flex flex-wrap items-end gap-3">
           <div className="min-w-[280px] flex-1">
-            <label className="block text-xs font-semibold text-slate-500">New question</label>
+            <label className="block text-xs font-semibold text-[var(--text-dim)]">New question</label>
             <Input className="mt-1.5 w-full" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="How sustainable does this sprint's pace feel?" />
           </div>
           <PrimaryButton onClick={handleCreate} disabled={!question.trim()}>Send survey</PrimaryButton>
@@ -106,15 +106,15 @@ function PulseSurveysSection({ workspaceId, canManage }: { workspaceId: string; 
         {surveys.length === 0 && <EmptyState title="No pulse surveys yet" body={canManage ? "Send one above." : "A manager or admin hasn't sent one yet."} />}
         {surveys.map((s) => (
           <Card key={s.id}>
-            <p className="font-medium text-slate-900">{s.question}</p>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="font-medium text-[var(--foreground)]">{s.question}</p>
+            <p className="mt-1 text-xs text-[var(--text-dim)]">
               {s.response_count} response(s){s.average_score !== null && <> · avg {s.average_score}/5</>}
               {s.closes_at && <> · closes {new Date(s.closes_at).toLocaleDateString()}</>}
             </p>
             {!responded[s.id] && (
               <div className="mt-3 flex items-center gap-2">
                 <select
-                  className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm"
+                  className="rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-1.5 text-sm"
                   value={respondScore[s.id] ?? 3}
                   onChange={(e) => setRespondScore((r) => ({ ...r, [s.id]: Number(e.target.value) }))}
                 >
@@ -168,19 +168,19 @@ function WorkingAgreementsSection({ workspaceId, canManage }: { workspaceId: str
 
   return (
     <section>
-      <h2 className="text-lg font-bold text-slate-900">Working agreements</h2>
-      <p className="mt-1 text-sm text-slate-500">Real text the team wrote — never generated on their behalf.</p>
+      <h2 className="text-lg font-bold text-[var(--foreground)]">Working agreements</h2>
+      <p className="mt-1 text-sm text-[var(--text-dim)]">Real text the team wrote — never generated on their behalf.</p>
 
       {canManage && (
         <Card className="mt-4 space-y-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-500">Title</label>
+            <label className="block text-xs font-semibold text-[var(--text-dim)]">Title</label>
             <Input className="mt-1.5 w-full" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Code review SLA" disabled={editingTitle !== null} />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-500">Agreement text (Markdown)</label>
+            <label className="block text-xs font-semibold text-[var(--text-dim)]">Agreement text (Markdown)</label>
             <textarea
-              className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-[var(--accent-neon-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-neon)]/30"
+              className="mt-1.5 w-full rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-neon-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-neon)]/30"
               rows={4}
               value={body}
               onChange={(e) => setBody(e.target.value)}
@@ -198,11 +198,11 @@ function WorkingAgreementsSection({ workspaceId, canManage }: { workspaceId: str
         {agreements.map((a) => (
           <Card key={a.id}>
             <div className="flex items-start justify-between gap-3">
-              <h3 className="font-semibold text-slate-900">{a.title}</h3>
+              <h3 className="font-semibold text-[var(--foreground)]">{a.title}</h3>
               {canManage && <SecondaryButton className="px-3 py-1 text-xs" onClick={() => startEdit(a)}>Edit</SecondaryButton>}
             </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{a.body_markdown}</p>
-            <p className="mt-2 text-xs text-slate-400">Updated {new Date(a.updated_at).toLocaleDateString()}</p>
+            <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-muted)]">{a.body_markdown}</p>
+            <p className="mt-2 text-xs text-[var(--text-dim)]">Updated {new Date(a.updated_at).toLocaleDateString()}</p>
           </Card>
         ))}
       </div>

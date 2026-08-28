@@ -12,8 +12,9 @@ from app.db.models import Commit, ReconciliationFlag, ReconciliationFlagType, Re
 from app.db.session import get_db
 from app.queue.client import enqueue
 from app.schemas import OrphanCommitOut
+from app.billing_access import require_active_access
 
-router = APIRouter(tags=["orphan-commits"])
+router = APIRouter(tags=["orphan-commits"], dependencies=[Depends(require_active_access)])
 
 
 class LinkCommitRequest(BaseModel):

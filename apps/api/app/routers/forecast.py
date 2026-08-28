@@ -17,8 +17,9 @@ from app.auth.dependencies import ensure_workspace_access, get_internal_user, re
 from app.db.models import ConfidenceScore, Repo, Sprint, Ticket, User
 from app.db.session import get_db
 from app.schemas import DeliveryForecast
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/forecast", tags=["forecast"])
+router = APIRouter(prefix="/forecast", tags=["forecast"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("/{sprint_id}", response_model=DeliveryForecast, dependencies=[Depends(require_feature_flag("delivery_forecast"))])

@@ -47,7 +47,7 @@ export function PipelineTimeline({ steps }: { steps: { title: ReactNode; body: R
         gsap.to(circle, {
           backgroundColor: "var(--accent-neon)",
           borderColor: "var(--accent-neon)",
-          color: "#1a2e05",
+          color: "#04201f",
           scale: 1.08,
           ease: "power2.out",
           scrollTrigger: {
@@ -66,7 +66,7 @@ export function PipelineTimeline({ steps }: { steps: { title: ReactNode; body: R
   return (
     <div ref={containerRef} className="relative">
       {/* Track (static) + fill (animated) */}
-      <div className="absolute left-6 top-6 bottom-6 w-0.5 bg-slate-200 hidden md:block" />
+      <div className="absolute left-6 top-6 bottom-6 w-0.5 bg-[var(--line-strong)] hidden md:block" />
       <div
         ref={fillRef}
         className="absolute left-6 top-6 bottom-6 w-0.5 origin-top bg-[var(--accent-neon)] hidden md:block"
@@ -80,13 +80,13 @@ export function PipelineTimeline({ steps }: { steps: { title: ReactNode; body: R
               ref={(el) => {
                 circleRefs.current[i] = el;
               }}
-              className="hidden md:flex flex-shrink-0 w-12 h-12 rounded-full bg-white border border-brand/20 items-center justify-center shadow-sm relative z-10 text-brand font-bold"
+              className="hidden md:flex flex-shrink-0 w-12 h-12 rounded-full bg-[var(--surface)] border border-brand/20 items-center justify-center shadow-sm relative z-10 text-brand font-bold"
             >
               {i + 1}
             </div>
-            <div className="flex-1 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-900 mb-2">{step.title}</h3>
-              <p className="text-sm text-slate-600 leading-relaxed">{step.body}</p>
+            <div className="flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-sm">
+              <h3 className="text-lg font-bold text-[var(--foreground)] mb-2">{step.title}</h3>
+              <p className="text-sm text-[var(--text-muted)] leading-relaxed">{step.body}</p>
             </div>
           </div>
         ))}

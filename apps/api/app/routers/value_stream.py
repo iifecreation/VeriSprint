@@ -15,8 +15,9 @@ from app.auth.dependencies import get_repo_for_user, require_feature_flag
 from app.db.models import Repo, Ticket, TicketStatusChange
 from app.db.session import get_db
 from app.schemas import ValueStreamReport, ValueStreamStage
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/value-stream", tags=["value-stream"])
+router = APIRouter(prefix="/value-stream", tags=["value-stream"], dependencies=[Depends(require_active_access)])
 
 
 @router.get("", response_model=ValueStreamReport, dependencies=[Depends(require_feature_flag("value_stream_view"))])

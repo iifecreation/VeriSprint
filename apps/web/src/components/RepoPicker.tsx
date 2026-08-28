@@ -30,7 +30,7 @@ export function RepoPicker({
 
   if (repos.length === 0) {
     return (
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-[var(--text-dim)]">
         No repos connected yet. Install the GitHub App to get started.
       </p>
     );
@@ -38,7 +38,7 @@ export function RepoPicker({
 
   return (
     <select
-      className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 focus:border-[var(--accent-neon-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-neon)]/30"
+      className="rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--foreground)] focus:border-[var(--accent-neon-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-neon)]/30"
       value={selectedRepoId ?? ""}
       onChange={(e) => onChange(e.target.value)}
     >

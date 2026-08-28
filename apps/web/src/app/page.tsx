@@ -19,5 +19,5 @@ export default function HomePage() {
     });
   }, [router]);
 
-  return <div className="flex min-h-[70vh] items-center justify-center text-sm text-slate-400">Redirecting…</div>;
+  return <div className="flex min-h-[70vh] items-center justify-center text-sm text-[var(--text-dim)]">Redirecting…</div>;
 }

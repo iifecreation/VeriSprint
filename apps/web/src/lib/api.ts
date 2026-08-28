@@ -46,6 +46,7 @@ export type Ticket = {
   title: string;
   status: string;
   assignee_github_login: string | null;
+  acceptance_criteria: string | null;
   confidence: ConfidenceScore | null;
   flags: ReconciliationFlag[];
 };
@@ -105,7 +106,7 @@ export type BurndownPoint = {
 
 export type Burndown = { sprint: Sprint; points: BurndownPoint[] };
 
-export type ReportType = "client_portal" | "investor_update" | "sprint_rollup" | "onboarding_doc";
+export type ReportType = "client_portal" | "investor_update" | "sprint_rollup" | "onboarding_doc" | "custom";
 
 export type ReportDocument = {
   id: string;
@@ -117,7 +118,14 @@ export type ReportDocument = {
   summary_text: string;
   status: "generating" | "ready" | "failed";
   share_token: string | null;
+  custom_sections: string[] | null;
   created_at: string;
+};
+
+export type ReportSectionOption = {
+  key: string;
+  label: string;
+  description: string;
 };
 
 export type PublicPortalReport = {
@@ -269,6 +277,31 @@ export type AdminRevenue = {
   workspace_count: number;
   by_plan_tier: Record<string, number>;
   by_status: Record<string, number>;
+};
+
+export type Subscription = {
+  id: string;
+  workspace_id: string;
+  plan_tier: string;
+  status: string;
+  mrr: number;
+  payment_provider: "stripe" | "paystack";
+  renewed_at: string | null;
+  created_at: string;
+  trial_ends_at: string | null;
+  has_active_access: boolean;
+};
+
+export type PricingPlan = {
+  id: string;
+  tier: string;
+  name: string;
+  price_usd: number;
+  billing_interval: "month" | "year";
+  is_active: boolean;
+  has_stripe_price: boolean;
+  has_paystack_plan: boolean;
+  updated_at: string;
 };
 
 export type AdminFeatureFlag = {
@@ -452,6 +485,51 @@ export type WorkspaceSSOConfig = {
   created_at: string;
 };
 
+export type MCPConfig = {
+  has_token: boolean;
+};
+
+export type AIToolSubscription = {
+  id: string;
+  workspace_id: string;
+  tool_name: string;
+  seat_count: number;
+  cost_per_seat_usd: number;
+  billing_period: "monthly" | "annual";
+  started_on: string;
+  ended_on: string | null;
+  notes: string | null;
+  created_at: string;
+  monthly_cost_usd: number;
+  is_active: boolean;
+};
+
+export type AIToolSubscriptionInput = {
+  tool_name: string;
+  seat_count: number;
+  cost_per_seat_usd: number;
+  billing_period: "monthly" | "annual";
+  started_on: string;
+  ended_on?: string | null;
+  notes?: string | null;
+};
+
+export type AIToolCostReportEntry = {
+  tool_name: string;
+  seat_count: number;
+  monthly_cost_usd: number;
+};
+
+export type AIToolCostReport = {
+  total_monthly_cost_usd: number;
+  active_subscription_count: number;
+  entries: AIToolCostReportEntry[];
+  subscriptions: AIToolSubscription[];
+  repo_ai_assisted_pct: number | null;
+  cost_per_adoption_point_usd: number | null;
+  method_note: string;
+};
+
 async function doFetch(path: string, init: RequestInit | undefined, accessToken: string | null): Promise<Response> {
   return fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -486,6 +564,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
       window.location.href = "/login";
     }
   }
+  // 402 = the workspace's trial ended and it isn't on a paid plan (see
+  // app/billing_access.py) — handled globally here, not per-page, so no
+  // individual page needs its own special-case for it. /subscribe itself
+  // calls billing/pricing endpoints, which are never gated, so this never
+  // becomes a redirect loop.
+  if (res.status === 402 && typeof window !== "undefined" && window.location.pathname !== "/subscribe") {
+    window.location.href = "/subscribe";
+  }
   if (!res.ok) {
     throw new Error(`API ${path} failed: ${res.status} ${await res.text()}`);
   }
@@ -499,6 +585,8 @@ export const api = {
 
   listTickets: (repoId: string) => apiFetch<Ticket[]>(`/tickets?repo_id=${repoId}`),
   getTicket: (ticketId: string) => apiFetch<Ticket>(`/tickets/${ticketId}`),
+  createTicket: (payload: { repo_id: string; key: string; title: string; status: string; description?: string; assignee_github_login?: string }) =>
+    apiFetch<Ticket>("/tickets", { method: "POST", body: JSON.stringify(payload) }),
   updateTicket: (ticketId: string, payload: Record<string, unknown>) =>
     apiFetch<Ticket>(`/tickets/${ticketId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   getImpactMap: (ticketId: string) => apiFetch<ImpactMapEntry[]>(`/tickets/${ticketId}/impact-map`),
@@ -554,6 +642,12 @@ export const api = {
     }),
   generateOnboardingDoc: (repoId: string) =>
     apiFetch<ReportDocument>("/reports/onboarding-doc", { method: "POST", body: JSON.stringify({ repo_id: repoId }) }),
+  listCustomReportSections: () => apiFetch<ReportSectionOption[]>("/reports/custom/sections"),
+  generateCustomReport: (repoId: string, periodStart: string, periodEnd: string, sections: string[]) =>
+    apiFetch<ReportDocument>("/reports/custom", {
+      method: "POST",
+      body: JSON.stringify({ repo_id: repoId, period_start: periodStart, period_end: periodEnd, sections }),
+    }),
   getPublicPortalReport: (shareToken: string) => apiFetch<PublicPortalReport>(`/portal/${shareToken}`),
 
   getAccuracy: (repoId: string) => apiFetch<AccuracyPoint[]>(`/accuracy?repo_id=${repoId}`),
@@ -610,6 +704,12 @@ export const api = {
 
   // --- Phase 2/3 competitor-parity features ---
   resolvedFeatureFlags: (keys: string[]) => apiFetch<{ flags: Record<string, boolean> }>(`/billing/feature-flags?keys=${keys.join(",")}`),
+  getSubscription: () => apiFetch<Subscription>("/billing/subscription"),
+  listPricingPlans: () => apiFetchNoAuth<PricingPlan[]>("/pricing-plans"),
+  createCheckout: (payload: { plan_tier: string; success_url: string; cancel_url: string; provider: "stripe" | "paystack" }) =>
+    apiFetch<{ checkout_url: string }>("/billing/checkout", { method: "POST", body: JSON.stringify(payload) }),
+  createBillingPortal: (return_url: string) =>
+    apiFetch<{ portal_url: string }>("/billing/portal", { method: "POST", body: JSON.stringify({ return_url }) }),
   getDora: (repoId: string, periodStart: string, periodEnd: string) =>
     apiFetch<DORAMetrics>(`/dora?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
   getCodeHealth: (repoId: string, periodStart: string, periodEnd: string) =>
@@ -670,6 +770,16 @@ export const api = {
   upsertSSOConfig: (payload: { issuer: string; client_id: string; client_secret: string; enabled: boolean }) =>
     apiFetch<WorkspaceSSOConfig>("/sso-config", { method: "PUT", body: JSON.stringify(payload) }),
   rotateSCIMToken: () => apiFetch<{ scim_token: string }>("/sso-config/rotate-scim-token", { method: "POST" }),
+  getMCPConfig: () => apiFetch<MCPConfig>("/mcp-config"),
+  rotateMCPToken: () => apiFetch<{ mcp_token: string }>("/mcp-config/rotate-token", { method: "POST" }),
+  listAIToolSubscriptions: () => apiFetch<AIToolSubscription[]>("/ai-tool-costs"),
+  createAIToolSubscription: (payload: AIToolSubscriptionInput) =>
+    apiFetch<AIToolSubscription>("/ai-tool-costs", { method: "POST", body: JSON.stringify(payload) }),
+  updateAIToolSubscription: (id: string, payload: Partial<AIToolSubscriptionInput>) =>
+    apiFetch<AIToolSubscription>(`/ai-tool-costs/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteAIToolSubscription: (id: string) => apiFetch<{ deleted: boolean }>(`/ai-tool-costs/${id}`, { method: "DELETE" }),
+  getAIToolCostReport: (repoId?: string | null) =>
+    apiFetch<AIToolCostReport>(`/ai-tool-costs/report${repoId ? `?repo_id=${repoId}` : ""}`),
 };
 
 export { API_BASE_URL };

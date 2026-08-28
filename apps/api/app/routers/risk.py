@@ -14,8 +14,9 @@ from app.auth.dependencies import get_repo_for_user, require_feature_flag
 from app.db.models import ConfidenceScore, ReconciliationFlag, Repo, Ticket
 from app.db.session import get_db
 from app.schemas import RiskRadar
+from app.billing_access import require_active_access
 
-router = APIRouter(prefix="/risk", tags=["risk"])
+router = APIRouter(prefix="/risk", tags=["risk"], dependencies=[Depends(require_active_access)])
 
 LOW_CONFIDENCE_THRESHOLD = 50
 STALE_DAYS = 5
