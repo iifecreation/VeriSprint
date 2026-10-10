@@ -22,7 +22,7 @@ out beyond code review.
 - **Database:** Postgres + pgvector (structured data + Repo Chat retrieval)
 - **Queue:** Redis-backed [arq](https://arq-docs.helpmanual.io/), including a daily cron dispatcher and a 5-minute system-metrics cron
 - **LLM:** provider-agnostic — Claude API by default, or a self-hosted OpenAI-compatible server (see [Private/On-Prem LLM](#privateon-prem-llm-option))
-- **Auth:** JWT access/refresh tokens (`app/auth/`) with 5-role RBAC — GitHub OAuth (primary) or email/password (fallback) for login, GitHub App install (read-only) for repo access, optional per-workspace OIDC SSO + SCIM provisioning for Enterprise
+- **Auth:** JWT access/refresh tokens (`app/auth/`) with 5-role RBAC — GitHub OAuth (primary) or email/password (fallback) for login, GitHub App install (mostly read-only, plus the Pull requests/Issues *write* scope PR Workflow Automation uses — see below) for repo access, optional per-workspace OIDC SSO + SCIM provisioning for Enterprise
 - **Billing:** Stripe Checkout + Customer Portal + webhooks, synced to a `Subscription` record and gated via per-workspace `FeatureFlag`s
 - **Observability:** DB-backed `ErrorEvent`/`SystemMetric` pipeline (the Super-Admin Dashboard's real data source) + optional Sentry
 - **Notifications:** Slack app (Bolt) + Resend email for daily digests, `/verisprint` Repo Chat
@@ -191,8 +191,11 @@ every outstanding token for that user, not just future ones.
 | **Error/metrics observability** | `observability.py`, global exception handler, `workers/metrics.py` cron | `apps/admin` (Errors, Metrics panels) |
 | **Public marketing site (9 pages)** | — | `apps/marketing` (separate app) |
 | **DORA Panel** | `routers/dora.py` | `/insights` |
+| **Git Efficiency & Quality Metrics** (PR Size, Cycle Time breakdown, Rework/Refactor Rate, Review Depth, benchmark bands) | `routers/efficiency.py`, `metrics.py`, `benchmarks.py` | `/insights` |
+| **Investment Profile** (New Value / Feature Enhancements / Developer Experience / Keeping the Lights On, target-vs-actual, Inefficiency Pool) | `routers/allocation.py` (`/profile`), `investment.py` | `/insights` |
+| **PR Workflow Automation** (auto-label, auto-assign reviewers, auto-approve narrowly-safe PRs — gitStream-equivalent) | `pr_policy.py`, `workers/pr_policy.py`, `integrations/github_client.py` (write ops) | `/reviewers` (shows what was done) |
 | **Blocker Nudge Bot** | `workers/blockers.py` | flags on `/dashboard` (`possible_blocker` flag type) |
-| **Team Goals & Targets** | `goals.py`, `routers/goals.py` | `/insights` |
+| **Team Goals & Targets** (OKR cascade via `parent_goal_id`, direction-aware progress, Slack/email breach alerting) | `goals.py`, `routers/goals.py`, `workers/goal_alerts.py` | `/insights` |
 | **Code Health Signals** | `routers/code_health.py` | `/insights` |
 | **Visual Changelog** | `routers/changelog.py` | `/analytics` |
 | **AI Contribution Tracker** | `routers/contributions.py` | `/analytics` |
@@ -282,6 +285,33 @@ payload, and — the part that needed no Stripe account at all — the
 including a Super-Admin toggle propagating to a real user's access in the
 same request cycle.
 
+### PR Workflow Automation (GitHub write access)
+
+`pr_policy.py` classifies every opened/synchronized PR against a small,
+fixed rule set (not a DSL editor) purely from file paths and line counts —
+decoupled from the LLM evidence pipeline on purpose, so it works even
+without `ANTHROPIC_API_KEY` configured. `workers/pr_policy.py` turns that
+classification into real GitHub writes: adding labels (auto-creating them if
+the repo doesn't have them yet), requesting reviewers (same file-history
+basis as PR AutoRoute, matched against `Commit.touched_file_paths` instead
+of EvidenceItem so it doesn't wait on analysis), and — the most
+conservatively gated capability — auto-approving PRs that touch *only*
+non-functional paths (docs, `.gitignore`, license, changelog, PR/issue
+templates) within a small line-count threshold.
+
+Each of the three capabilities is its own `FeatureFlag`, default off,
+independent of the GitHub App's own permission grant:
+`pr_policy_labeling`, `pr_policy_reviewer_assignment`,
+`pr_policy_auto_approve`. This needs the GitHub App's permissions expanded
+from read-only to include **Pull requests: write** (review requests,
+approvals) and **Issues: write** (labels, which PRs share with issues in
+GitHub's API) — a manifest/settings change on GitHub's side, not something
+this codebase can flip on its own. Auto-approval adds exactly one approving
+review, the same as a human clicking "Approve" — it does not and cannot
+bypass a repo's required-review count or branch protection rules, and it's
+tied to the exact head commit it was granted for (`policy_auto_approved_sha`)
+so a new push is never silently treated as still-approved.
+
 ## What's genuinely verified vs. what needs real credentials
 
 Everything backed by the database was exercised against a real running
@@ -296,12 +326,38 @@ auth flow (login, refresh rotation, logout revocation, invite, password
 reset), the Super-Admin Dashboard's 8 panels, SCIM provisioning, and every
 Phase 2/3 competitor-parity feature (DORA, code health, risk radar, team
 goals, PR AutoRoute, delivery forecast, cost capitalization, value stream
-view, pulse surveys, working agreements).
+view, pulse surveys, working agreements). The Git Efficiency & Quality
+Metrics panel's math (PR Size, Cycle Time breakdown, Merge Frequency, Review
+Depth, Rework/Refactor Rate heuristics, Change Failure Rate, MTTR) and the
+Investment Profile's category classification were both exercised the same
+way — real seeded `PullRequest`/`Commit`/`PullRequestReview`/`Deployment`/
+`Ticket` rows, every number checked by hand against what was seeded before
+deleting it again. The OKR cascade and breach-alerting worker
+(`workers/goal_alerts.py`) were run the same way too — a seeded org-level
+goal and a cascading team goal, driven through the real direction-aware
+progress/breach logic and the actual worker function end-to-end, confirming
+both a true breach (flagged, audited, `last_alert_sent_at` set) and a met
+goal (correctly never flagged). PR Workflow Automation's classification
+logic and the worker's idempotency (same labels/reviewers never re-sent,
+same head commit never re-approved) were verified the same way end-to-end
+against the real database, with only the GitHub write calls themselves
+mocked — there's no live GitHub App installation with write permissions in
+this environment to exercise `add_labels`/`request_reviewers`/
+`approve_pull_request` against a real repo, see below.
 
 What hasn't run against real external services in this environment, because
 doing so needs credentials only you can provide:
 
-- GitHub App webhooks (needs a registered GitHub App + a real repo)
+- GitHub App webhooks (needs a registered GitHub App + a real repo) — note the App's webhook
+  subscriptions need `pull_request_review` and `deployment_status` added (alongside
+  `push`/`pull_request`/`installation*`) for PR Pickup/Review Time, Deploy Time, Change Failure Rate,
+  and MTTR to populate; a repo that never uses the GitHub Deployments API simply never sends
+  `deployment_status`, and those metrics stay null rather than guessed
+- PR Workflow Automation's actual GitHub writes (needs the App's permissions expanded to Pull
+  requests: write + Issues: write, and a real repo with the relevant FeatureFlags on — the
+  classification/idempotency logic itself is verified, see above, but `add_labels`/
+  `request_reviewers`/`approve_pull_request` have never run against the real GitHub API in this
+  environment)
 - Slack digest delivery and the `/verisprint` slash command (needs a Slack app)
 - Resend email digests, invites, and password-reset emails (needs a Resend API key)
 - SSO login itself, at either level (needs a real customer identity provider — SCIM provisioning *is* verified, see above)

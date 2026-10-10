@@ -101,6 +101,39 @@ export default function ReviewersPage() {
             </p>
           )}
 
+          {selectedPr &&
+            (selectedPr.policy_labels_applied.length > 0 ||
+              selectedPr.policy_reviewers_requested.length > 0 ||
+              selectedPr.policy_auto_approved_sha) && (
+              <Card className="mt-4">
+                <h2 className="text-sm font-semibold text-[var(--foreground)]">PR Workflow Automation — already done to this PR</h2>
+                <p className="mt-1 text-xs text-[var(--text-dim)]">
+                  Real actions VeriSprint took on GitHub, not suggestions — see Operator Console → Flags for
+                  pr_policy_labeling / pr_policy_reviewer_assignment / pr_policy_auto_approve.
+                </p>
+                {selectedPr.policy_labels_applied.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedPr.policy_labels_applied.map((l) => (
+                      <Badge key={l} tone="default">
+                        {l}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {selectedPr.policy_reviewers_requested.length > 0 && (
+                  <p className="mt-2 text-sm text-[var(--text-muted)]">
+                    Review requested from: {selectedPr.policy_reviewers_requested.map((r) => `@${r}`).join(", ")}
+                  </p>
+                )}
+                {selectedPr.policy_auto_approved_sha && (
+                  <p className="mt-2 text-sm text-[var(--text-muted)]">
+                    <Badge tone="success">auto-approved</Badge> at commit{" "}
+                    <span className="font-mono text-xs">{selectedPr.policy_auto_approved_sha.slice(0, 7)}</span>
+                  </p>
+                )}
+              </Card>
+            )}
+
           {result && (
             <div className="mt-6 space-y-4">
               <Card>

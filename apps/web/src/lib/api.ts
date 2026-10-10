@@ -323,9 +323,57 @@ export type DORAMetrics = {
   deployed_pr_count: number;
   deployment_frequency_per_day: number;
   lead_time_for_changes_hours: number | null;
-  change_failure_rate: null;
-  mean_time_to_restore_hours: null;
-  unavailable_metrics_note: string;
+  change_failure_rate: number | null;
+  mean_time_to_restore_hours: number | null;
+  unavailable_metrics_note: string | null;
+};
+
+export type BenchmarkBand = "elite" | "good" | "fair" | "needs_focus";
+
+export type BenchmarkedValue = {
+  value: number | null;
+  band: BenchmarkBand | null;
+  unit: string;
+};
+
+export type EfficiencyReport = {
+  period_start: string;
+  period_end: string;
+  merged_pr_count: number;
+  coding_time_hours: BenchmarkedValue;
+  pr_pickup_time_hours: BenchmarkedValue;
+  pr_review_time_hours: BenchmarkedValue;
+  deploy_time_hours: BenchmarkedValue;
+  cycle_time_hours: BenchmarkedValue;
+  merge_frequency_per_dev_per_week: BenchmarkedValue;
+  pr_size_lines: BenchmarkedValue;
+  review_depth_per_pr: number | null;
+  prs_merged_without_review_pct: number | null;
+  rework_rate_pct: BenchmarkedValue;
+  refactor_rate_pct: BenchmarkedValue;
+  change_failure_rate_pct: BenchmarkedValue;
+  mttr_hours: BenchmarkedValue;
+  method_note: string;
+};
+
+export type InvestmentCategory = "new_value" | "feature_enhancements" | "developer_experience" | "keeping_the_lights_on";
+
+export type InvestmentCategoryEntry = {
+  category: InvestmentCategory;
+  ticket_count: number;
+  code_change_lines: number;
+  pct_of_categorized_lines: number;
+  target_pct: number;
+};
+
+export type InvestmentProfileReport = {
+  period_start: string;
+  period_end: string;
+  categories: InvestmentCategoryEntry[];
+  uncategorized_code_change_lines: number;
+  uncategorized_pct_of_total: number;
+  inefficiency_pool_pct: number | null;
+  method_note: string;
 };
 
 export type CodeHealthSignals = {
@@ -348,17 +396,23 @@ export type RiskRadar = {
   risk_score: number;
 };
 
+export type GoalDirection = "higher_is_better" | "lower_is_better" | "target_seeking";
+
 export type TeamGoal = {
   id: string;
   workspace_id: string;
   repo_id: string | null;
+  parent_goal_id: string | null;
   name: string;
   metric_key: string;
+  direction: GoalDirection;
   target_value: number;
   period_start: string;
   period_end: string;
   current_value: number | null;
   progress_pct: number | null;
+  is_breaching: boolean;
+  last_alert_sent_at: string | null;
   created_at: string;
 };
 
@@ -374,6 +428,9 @@ export type PullRequest = {
   opened_at: string;
   merged_at: string | null;
   linked_ticket_key: string | null;
+  policy_labels_applied: string[];
+  policy_reviewers_requested: string[];
+  policy_auto_approved_sha: string | null;
 };
 
 export type ReviewerSuggestion = { file_path: string; suggested_reviewers: string[]; basis: string };
@@ -712,12 +769,24 @@ export const api = {
     apiFetch<{ portal_url: string }>("/billing/portal", { method: "POST", body: JSON.stringify({ return_url }) }),
   getDora: (repoId: string, periodStart: string, periodEnd: string) =>
     apiFetch<DORAMetrics>(`/dora?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
+  getEfficiency: (repoId: string, periodStart: string, periodEnd: string) =>
+    apiFetch<EfficiencyReport>(`/efficiency?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
+  getInvestmentProfile: (repoId: string, periodStart: string, periodEnd: string) =>
+    apiFetch<InvestmentProfileReport>(`/allocation/profile?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
   getCodeHealth: (repoId: string, periodStart: string, periodEnd: string) =>
     apiFetch<CodeHealthSignals>(`/code-health?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
   getRiskRadar: (repoId: string) => apiFetch<RiskRadar>(`/risk?repo_id=${repoId}`),
   listTeamGoals: (workspaceId: string) => apiFetch<TeamGoal[]>(`/goals?workspace_id=${workspaceId}`),
-  createTeamGoal: (payload: { name: string; metric_key: string; target_value: number; period_start: string; period_end: string; repo_id?: string | null }) =>
-    apiFetch<TeamGoal>("/goals", { method: "POST", body: JSON.stringify(payload) }),
+  createTeamGoal: (payload: {
+    name: string;
+    metric_key: string;
+    target_value: number;
+    period_start: string;
+    period_end: string;
+    repo_id?: string | null;
+    parent_goal_id?: string | null;
+  }) => apiFetch<TeamGoal>("/goals", { method: "POST", body: JSON.stringify(payload) }),
+  deleteTeamGoal: (goalId: string) => apiFetch<{ ok: boolean }>(`/goals/${goalId}`, { method: "DELETE" }),
 
   // --- PR AutoRoute ---
   listPullRequests: (repoId: string) => apiFetch<PullRequest[]>(`/pr-autoroute/pull-requests?repo_id=${repoId}`),

@@ -1,9 +1,22 @@
 """
 GitHub App install flow + webhook receiver (Step 1-2).
 
-Read-only scopes only for MVP: Contents (read), Metadata (read), Pull requests
-(read). Webhook events (push, pull_request) enqueue ingestion jobs rather than
-doing the fetch inline, so we ack GitHub fast and let the worker do the I/O.
+Mostly read-only: Contents (read), Metadata (read), Pull requests (read),
+Deployments (read — Git Efficiency Metrics' CFR/MTTR, see app/metrics.py; a
+repo that never uses GitHub Deployments just never sends these events, and
+those metrics stay null rather than guessed). Phase 4 (PR Workflow
+Automation — app/pr_policy.py, app/workers/pr_policy.py) adds two write
+scopes: Pull requests (write — review requests, approvals) and Issues
+(write — labels, which PRs share with issues in GitHub's API); every write
+capability stays behind its own FeatureFlag, default off, regardless of the
+App's own permission grant. The App's webhook subscriptions need
+`pull_request_review` and `deployment_status` added alongside
+`push`/`pull_request`/`installation*` for CFR/MTTR/Pickup/Review Time to
+populate — `pull_request` already covers PR Workflow Automation, no new
+subscription needed there. This file handles the events, it doesn't
+register the subscription or permission itself (that's a GitHub App
+settings change). Webhook events enqueue ingestion jobs rather than doing
+the fetch inline, so we ack GitHub fast and let the worker do the I/O.
 
 A new GitHub App installation creates a new Workspace (spec Section 11) —
 one tenant per installed account/org.
@@ -60,6 +73,11 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)) -
         await enqueue("ingest_push", body)
     elif event == "pull_request":
         await enqueue("ingest_pull_request", body)
+        await enqueue("apply_pr_policy", body)
+    elif event == "pull_request_review":
+        await enqueue("ingest_pull_request_review", body)
+    elif event == "deployment_status":
+        await enqueue("ingest_deployment_status", body)
 
     return {"ok": True}
 

@@ -183,12 +183,44 @@ class PullRequest(Base):
     state: Mapped[str] = mapped_column(String(32))  # open | closed | merged
     merged_at: Mapped[datetime | None]
     opened_at: Mapped[datetime]
+    # Set on the `closed` webhook action regardless of merge outcome — lets a
+    # closed-without-merge PR be told apart from one that's still open,
+    # without overloading `merged_at`.
+    closed_at: Mapped[datetime | None]
     body: Mapped[str | None] = mapped_column(Text)
     linked_ticket_key: Mapped[str | None] = mapped_column(String(64), index=True)
+    # PR-size fields (Phase 3 Git Efficiency Metrics): read directly off
+    # GitHub's own `pull_request` webhook payload — not derived by summing
+    # synthetic Commit rows, which only exist for the pipeline's own
+    # evidence-analysis purposes and don't carry a complete diff stat.
+    additions: Mapped[int] = mapped_column(default=0)
+    deletions: Mapped[int] = mapped_column(default=0)
+    changed_files: Mapped[int] = mapped_column(default=0)
+    # First time GitHub told us a reviewer was requested on this PR (the
+    # `pull_request` webhook's `review_requested` action carries no event
+    # timestamp of its own, so this is "when our webhook received it" —
+    # close enough for a Pickup Time metric, not claimed to be exact to the
+    # second). Null until a reviewer has ever been requested.
+    first_review_requested_at: Mapped[datetime | None]
+    # The commit GitHub actually merged into the base branch — the join key
+    # for matching this PR to the Deployment that shipped it (Deploy Time).
+    # Null for PRs closed without merging, and for PRs ingested before this
+    # field existed (merge_commit_sha isn't backfilled).
+    merge_commit_sha: Mapped[str | None] = mapped_column(String(40))
+    # PR Workflow Automation bookkeeping (Phase 4 competitor-parity — see
+    # app/pr_policy.py, app/workers/pr_policy.py). Idempotency, not a cache:
+    # labels/reviewers already recorded here are never re-sent to GitHub, and
+    # `policy_auto_approved_sha` ties an auto-approval to the exact head
+    # commit it was granted for — a new push (new sha) is never silently
+    # treated as still-approved.
+    policy_labels_applied: Mapped[list[str]] = mapped_column(JSON, default=list)
+    policy_reviewers_requested: Mapped[list[str]] = mapped_column(JSON, default=list)
+    policy_auto_approved_sha: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     repo: Mapped[Repo] = relationship(back_populates="pull_requests")
     commits: Mapped[list["Commit"]] = relationship(back_populates="pull_request")
+    reviews: Mapped[list["PullRequestReview"]] = relationship(back_populates="pull_request", order_by="PullRequestReview.submitted_at")
 
 
 class Commit(Base):
@@ -209,6 +241,13 @@ class Commit(Base):
     files_changed: Mapped[int] = mapped_column(default=0)
     additions: Mapped[int] = mapped_column(default=0)
     deletions: Mapped[int] = mapped_column(default=0)
+    # File paths this commit touched (added/modified/removed) — straight off
+    # the push webhook payload for push-ingested commits; empty for the
+    # synthetic per-PR commit ingest_pull_request creates (that one exists
+    # for the evidence-analysis pipeline, not as a source of file-level
+    # Rework/Refactor Rate data — see app/metrics.py). Plain JSON list, not a
+    # separate table: this never needs to be queried by individual path.
+    touched_file_paths: Mapped[list[str]] = mapped_column(JSON, default=list)
     linked_ticket_key: Mapped[str | None] = mapped_column(String(64), index=True)
     # Ingestion/analysis pipeline status for this commit.
     status: Mapped[str] = mapped_column(String(32), default="ingested")
@@ -218,6 +257,59 @@ class Commit(Base):
     repo: Mapped[Repo] = relationship(back_populates="commits")
     pull_request: Mapped[PullRequest | None] = relationship(back_populates="commits")
     evidence_items: Mapped[list["EvidenceItem"]] = relationship(back_populates="commit")
+
+
+class PullRequestReview(Base):
+    """
+    A single GitHub PR review event (Phase 3 Git Efficiency Metrics), from the
+    `pull_request_review` webhook's `submitted` action. Backs PR Pickup Time
+    (PR opened -> first review activity), PR Review Time (first review ->
+    merge), and Review Depth (reviews/comments per PR) — none of which are
+    derivable from PullRequest/Commit alone.
+    """
+
+    __tablename__ = "pull_request_reviews"
+    __table_args__ = (UniqueConstraint("pull_request_id", "github_review_id"),)
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    pull_request_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pull_requests.id"), index=True)
+    github_review_id: Mapped[int]
+    reviewer_github_login: Mapped[str] = mapped_column(String(255))
+    state: Mapped[str] = mapped_column(String(32))  # approved | changes_requested | commented
+    submitted_at: Mapped[datetime]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    pull_request: Mapped[PullRequest] = relationship(back_populates="reviews")
+
+
+class Deployment(Base):
+    """
+    A GitHub Deployments API deployment + its terminal status (Phase 3 Git
+    Efficiency Metrics), from the `deployment`/`deployment_status` webhooks.
+    The real, non-guessed basis for Change Failure Rate and Mean Time to
+    Restore — both previously hardcoded null in DORAMetrics (see dora.py) for
+    lack of any deployment data. A repo that never uses GitHub Deployments
+    (Actions/Releases-based or otherwise) simply never populates this table,
+    and CFR/MTTR stay null for it rather than being guessed from PR activity.
+    """
+
+    __tablename__ = "deployments"
+    __table_args__ = (UniqueConstraint("repo_id", "github_deployment_id"),)
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    repo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("repos.id"), index=True)
+    github_deployment_id: Mapped[int]
+    environment: Mapped[str] = mapped_column(String(128), default="production")
+    sha: Mapped[str] = mapped_column(String(40), index=True)
+    # pending -> success | failure | error (terminal states only count toward CFR/MTTR)
+    state: Mapped[str] = mapped_column(String(32), default="pending")
+    created_at_gh: Mapped[datetime]
+    # Set when `state` first reaches a terminal value — the timestamp CFR/MTTR
+    # windowing and restore-time math both key off, not `created_at_gh`.
+    resolved_at_gh: Mapped[datetime | None]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    repo: Mapped[Repo] = relationship()
 
 
 class EvidenceKind(str, enum.Enum):
@@ -562,10 +654,17 @@ class ClientPortalLink(Base):
 
 class TeamGoal(Base):
     """
-    Team Goals & Targets (Phase 2 competitor-parity): a target on a metric
-    VeriSprint already computes for real (avg Confidence Score, reconciliation
-    accuracy, etc.) — progress is always read live from that metric, never a
-    manually-updated percentage.
+    Team Goals & Targets (Phase 2 competitor-parity, OKR cascade added in
+    Phase 3): a target on a metric VeriSprint already computes for real (avg
+    Confidence Score, reconciliation accuracy, etc.) — progress is always
+    read live from that metric, never a manually-updated percentage.
+
+    `repo_id is None` is this goal's existing "org-level" signal (workspace-
+    wide, not scoped to one repo); `parent_goal_id` additionally lets a
+    repo-scoped "team" goal (a Key Result) point back at the org-level
+    Objective it cascades from, for roll-up display — see
+    app/routers/goals.py and app/goals.py (direction-aware progress/breach
+    logic) and app/workers/goal_alerts.py (breach alerting).
     """
 
     __tablename__ = "team_goals"
@@ -573,6 +672,10 @@ class TeamGoal(Base):
     id: Mapped[uuid.UUID] = _uuid_pk()
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
     repo_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("repos.id"), nullable=True, index=True)
+    # Self-referential — null for a top-level (typically org) goal, set for a
+    # goal that cascades from another. Not enforced to be a different scope
+    # than its parent; that's a UI/process convention, not a DB constraint.
+    parent_goal_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("team_goals.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     # One of the metric keys app/goals.py knows how to compute live — see
     # GOAL_METRIC_COMPUTERS there. Kept as a plain string (not an enum) so new
@@ -583,6 +686,11 @@ class TeamGoal(Base):
     period_end: Mapped[datetime]
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # Set by app/workers/goal_alerts.py the last time this goal was flagged
+    # as breaching and an alert was actually sent — both an audit trail and
+    # the throttle that keeps the daily cron from re-sending the same alert
+    # every run.
+    last_alert_sent_at: Mapped[datetime | None]
 
 
 class IntegrationStatus(str, enum.Enum):

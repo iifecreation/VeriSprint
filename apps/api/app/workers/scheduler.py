@@ -20,3 +20,6 @@ async def run_daily_maintenance(ctx) -> None:
         await enqueue("detect_activity_anomalies", str(repo.id))
         await enqueue("detect_blockers", str(repo.id))
         await enqueue("send_daily_digest", str(repo.id), yesterday)
+
+    # Workspace/goal-scoped, not per-repo — evaluates every active TeamGoal once.
+    await enqueue("check_goal_breaches")

@@ -1,4 +1,5 @@
-"""Team Goals & Targets (Phase 2 competitor-parity): CRUD for a target on a real metric, with progress always read live — see app/goals.py."""
+"""Team Goals & Targets (Phase 2 competitor-parity, OKR cascade + breach flagging in Phase 3): CRUD for a target on a real metric, with progress always read live — see app/goals.py."""
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,7 +10,7 @@ from app.audit import record_audit_for_user
 from app.auth.dependencies import ensure_workspace_access, get_internal_user, require_feature_flag
 from app.db.session import get_db
 from app.db.models import Repo, TeamGoal, User
-from app.goals import GOAL_METRIC_COMPUTERS
+from app.goals import GOAL_METRIC_COMPUTERS, GOAL_METRIC_DIRECTIONS, compute_progress_pct, is_goal_breaching
 from app.schemas import TeamGoalCreate, TeamGoalOut
 
 router = APIRouter(prefix="/goals", tags=["goals"], dependencies=[Depends(require_feature_flag("team_goals"))])
@@ -18,11 +19,16 @@ router = APIRouter(prefix="/goals", tags=["goals"], dependencies=[Depends(requir
 async def _to_goal_out(db: AsyncSession, goal: TeamGoal) -> TeamGoalOut:
     computer = GOAL_METRIC_COMPUTERS.get(goal.metric_key)
     current_value = await computer(db, goal.workspace_id, goal.repo_id, goal.period_start, goal.period_end) if computer else None
-    progress_pct = round(100 * current_value / goal.target_value, 1) if current_value is not None and goal.target_value else None
+    progress_pct = compute_progress_pct(goal.metric_key, current_value, goal.target_value)
+    now = datetime.now(timezone.utc)
     return TeamGoalOut(
-        id=goal.id, workspace_id=goal.workspace_id, repo_id=goal.repo_id, name=goal.name, metric_key=goal.metric_key,
+        id=goal.id, workspace_id=goal.workspace_id, repo_id=goal.repo_id, parent_goal_id=goal.parent_goal_id,
+        name=goal.name, metric_key=goal.metric_key,
+        direction=GOAL_METRIC_DIRECTIONS.get(goal.metric_key, "higher_is_better"),
         target_value=goal.target_value, period_start=goal.period_start, period_end=goal.period_end,
-        current_value=current_value, progress_pct=progress_pct, created_at=goal.created_at,
+        current_value=current_value, progress_pct=progress_pct,
+        is_breaching=is_goal_breaching(progress_pct, goal.period_start, goal.period_end, now),
+        last_alert_sent_at=goal.last_alert_sent_at, created_at=goal.created_at,
     )
 
 
@@ -47,9 +53,14 @@ async def create_goal(
         repo = await db.get(Repo, payload.repo_id)
         if repo is None or repo.workspace_id != user.workspace_id:
             raise HTTPException(status_code=404, detail="Repo not found in your workspace")
+    if payload.parent_goal_id is not None:
+        parent = await db.get(TeamGoal, payload.parent_goal_id)
+        if parent is None or parent.workspace_id != user.workspace_id:
+            raise HTTPException(status_code=404, detail="Parent goal not found in your workspace")
 
     goal = TeamGoal(
-        workspace_id=user.workspace_id, repo_id=payload.repo_id, name=payload.name, metric_key=payload.metric_key,
+        workspace_id=user.workspace_id, repo_id=payload.repo_id, parent_goal_id=payload.parent_goal_id,
+        name=payload.name, metric_key=payload.metric_key,
         target_value=payload.target_value, period_start=payload.period_start, period_end=payload.period_end,
         created_by_user_id=user.id,
     )

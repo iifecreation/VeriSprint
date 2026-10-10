@@ -511,13 +511,15 @@ class DORAMetrics(BaseModel):
     deployed_pr_count: int
     deployment_frequency_per_day: float
     lead_time_for_changes_hours: float | None
-    # Both null on purpose — VeriSprint has no deployment/incident tracking to
-    # compute these honestly from. Never a guessed number.
-    change_failure_rate: None = None
-    mean_time_to_restore_hours: None = None
-    unavailable_metrics_note: str = (
-        "Change Failure Rate and Mean Time to Restore require deployment/incident "
-        "tracking, which isn't connected — shown as unavailable rather than guessed."
+    # Real once this workspace's repos send GitHub `deployment_status` events
+    # (see app/routers/github_app.py, app/metrics.py) — null until then,
+    # never a guessed number derived from PR/commit activity alone.
+    change_failure_rate: float | None = None
+    mean_time_to_restore_hours: float | None = None
+    unavailable_metrics_note: str | None = (
+        "Change Failure Rate and Mean Time to Restore require this workspace's repos to use the "
+        "GitHub Deployments API — no deployment_status events received yet, so these are null "
+        "rather than guessed."
     )
 
 
@@ -583,19 +585,24 @@ class TeamGoalOut(BaseModel):
     id: uuid.UUID
     workspace_id: uuid.UUID
     repo_id: uuid.UUID | None
+    parent_goal_id: uuid.UUID | None
     name: str
     metric_key: str
+    direction: Literal["higher_is_better", "lower_is_better", "target_seeking"]
     target_value: float
     period_start: datetime
     period_end: datetime
     current_value: float | None = None
     progress_pct: float | None = None
+    is_breaching: bool = False
+    last_alert_sent_at: datetime | None = None
     created_at: datetime
 
 
 class TeamGoalCreate(BaseModel):
     name: str
     repo_id: uuid.UUID | None = None
+    parent_goal_id: uuid.UUID | None = None
     metric_key: str
     target_value: float
     period_start: datetime
@@ -645,6 +652,11 @@ class PullRequestOut(BaseModel):
     opened_at: datetime
     merged_at: datetime | None
     linked_ticket_key: str | None
+    # PR Workflow Automation bookkeeping (Phase 4) — what VeriSprint has
+    # actually done to this PR on GitHub, not a prediction of what it will do.
+    policy_labels_applied: list[str] = []
+    policy_reviewers_requested: list[str] = []
+    policy_auto_approved_sha: str | None = None
 
 
 class ReviewerSuggestion(BaseModel):
@@ -841,4 +853,73 @@ class AIToolCostReport(BaseModel):
         "Spend is exactly what you entered, normalized to a monthly figure for mixed billing periods. "
         "Adoption is the AI Contribution Tracker's self-disclosed percentage for the selected repo — "
         "not a productivity or quality claim, and not a comparison between tools."
+    )
+
+
+# --- Git Efficiency & Quality Metrics (Phase 3 competitor-parity) -------------
+
+class BenchmarkedValue(BaseModel):
+    value: float | None
+    band: Literal["elite", "good", "fair", "needs_focus"] | None = None
+    unit: str = ""
+
+
+class EfficiencyReport(BaseModel):
+    period_start: datetime
+    period_end: datetime
+    merged_pr_count: int
+    coding_time_hours: BenchmarkedValue
+    pr_pickup_time_hours: BenchmarkedValue
+    pr_review_time_hours: BenchmarkedValue
+    deploy_time_hours: BenchmarkedValue
+    cycle_time_hours: BenchmarkedValue
+    merge_frequency_per_dev_per_week: BenchmarkedValue
+    pr_size_lines: BenchmarkedValue
+    review_depth_per_pr: float | None
+    prs_merged_without_review_pct: float | None
+    rework_rate_pct: BenchmarkedValue
+    refactor_rate_pct: BenchmarkedValue
+    change_failure_rate_pct: BenchmarkedValue
+    mttr_hours: BenchmarkedValue
+    method_note: str = (
+        "Rework Rate and Refactor Rate are file-level/shape-based heuristics, not true git-blame "
+        "analysis — see app/metrics.py. Deploy Time, Change Failure Rate, and MTTR are null until "
+        "this workspace's repos send GitHub deployment_status events. Benchmark bands (Elite/Good/"
+        "Fair/Needs Focus) are a reasonable midpoint of publicly-published industry convention, not "
+        "a claim about where your org actually ranks — see app/benchmarks.py."
+    )
+
+
+# --- Investment Profile (Phase 3 competitor-parity) ---------------------------
+
+class InvestmentCategoryEntry(BaseModel):
+    category: Literal["new_value", "feature_enhancements", "developer_experience", "keeping_the_lights_on"]
+    ticket_count: int
+    code_change_lines: int
+    pct_of_categorized_lines: float
+    target_pct: float
+
+
+class InvestmentProfileReport(BaseModel):
+    period_start: datetime
+    period_end: datetime
+    categories: list[InvestmentCategoryEntry]
+    uncategorized_code_change_lines: int
+    uncategorized_pct_of_total: float
+    # Reuses the Git Efficiency Metrics panel's Rework Rate (app/metrics.py) as
+    # a cross-cutting "wasted effort" lens — null for the same reasons that
+    # metric can be null (no push-ingested commits with touched_file_paths in
+    # this period), not a separate 5th slice of the categories pie.
+    inefficiency_pool_pct: float | None
+    method_note: str = (
+        "Categories are classified from each linked ticket's title/description against a fixed, "
+        "ordered keyword list (first match wins, not configurable yet, not an LLM guess) — see "
+        "app/routers/allocation.py. Work with no linked ticket, or whose ticket matches no keyword, "
+        "is reported separately as 'uncategorized' rather than guessed into a bucket. Percentages "
+        "are of *categorized* code-change volume (additions+deletions) and sum to 100% across the "
+        "4 categories; uncategorized volume is reported alongside, not folded in. Inefficiency Pool "
+        "reuses the Git Efficiency Metrics panel's Rework Rate heuristic as a cross-cutting measure "
+        "— it already lives inside one of the 4 categories above, not a separate slice. Target "
+        "percentages are a reasonable midpoint of publicly-published industry convention, not a "
+        "claim about where your org should be — see app/benchmarks.py."
     )

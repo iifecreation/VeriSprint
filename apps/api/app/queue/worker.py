@@ -19,9 +19,16 @@ from app.workers.blockers import detect_blockers
 from app.workers.confidence import compute_confidence
 from app.workers.digest import send_daily_digest
 from app.workers.drift import detect_ticket_drift
-from app.workers.ingestion import ingest_pull_request, ingest_push
+from app.workers.goal_alerts import check_goal_breaches
+from app.workers.ingestion import (
+    ingest_deployment_status,
+    ingest_pull_request,
+    ingest_pull_request_review,
+    ingest_push,
+)
 from app.workers.metrics import collect_system_metrics
 from app.workers.orphans import detect_orphan_commits
+from app.workers.pr_policy import apply_pr_policy
 from app.workers.reconciliation import reconcile_ticket
 from app.workers.reports import (
     generate_client_portal_report,
@@ -45,6 +52,9 @@ class WorkerSettings:
     functions = [
         capture_worker_errors("ingestion")(ingest_push),
         capture_worker_errors("ingestion")(ingest_pull_request),
+        capture_worker_errors("ingestion")(ingest_pull_request_review),
+        capture_worker_errors("ingestion")(ingest_deployment_status),
+        capture_worker_errors("github_write")(apply_pr_policy),
         capture_worker_errors("llm")(analyze_commit),
         capture_worker_errors("llm")(compute_confidence),
         capture_worker_errors("reconciliation")(reconcile_ticket),
@@ -53,6 +63,7 @@ class WorkerSettings:
         capture_worker_errors("ingestion")(detect_orphan_commits),
         capture_worker_errors("analytics")(detect_activity_anomalies),
         capture_worker_errors("analytics")(detect_blockers),
+        capture_worker_errors("analytics")(check_goal_breaches),
         capture_worker_errors("llm")(generate_sprint_rollup),
         capture_worker_errors("llm")(generate_investor_update),
         capture_worker_errors("llm")(generate_client_portal_report),
