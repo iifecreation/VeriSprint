@@ -11,10 +11,25 @@ needs it, at which point missing credentials become a clear runtime error.
 from functools import lru_cache
 
 from slack_bolt.app.async_app import AsyncApp
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.db.models import Repo
+from app.db.session import AsyncSessionLocal
 
 settings = get_settings()
+
+
+async def resolve_repo_for_slack_channel(db: AsyncSession, channel_id: str | None) -> Repo | None:
+    """A Slack channel maps to a Repo via `Repo.slack_channel_id` (set from
+    the repo's Settings page) — never a UUID itself, so the slash command's
+    `channel_id` (Slack's own id, e.g. "C0123456789") must be looked up, not
+    parsed as one."""
+    if not channel_id:
+        return None
+    result = await db.execute(select(Repo).where(Repo.slack_channel_id == channel_id))
+    return result.scalars().first()
 
 
 @lru_cache
@@ -33,18 +48,15 @@ def get_bolt_app() -> AsyncApp:
             await respond("Ask a question about the repo, e.g. `/verisprint what shipped yesterday?`")
             return
 
-        from uuid import UUID
-
         from app.integrations.llm_client import answer_repo_chat_question
 
-        default_repo_id = command.get("channel_id")  # TODO: map Slack channel -> repo_id
-        try:
-            repo_uuid = UUID(default_repo_id)
-        except (ValueError, TypeError):
-            await respond("This channel isn't linked to a repo yet.")
+        async with AsyncSessionLocal() as db:
+            repo = await resolve_repo_for_slack_channel(db, command.get("channel_id"))
+        if repo is None:
+            await respond("This channel isn't linked to a repo yet — set it from the repo's Settings page.")
             return
 
-        answer = await answer_repo_chat_question(repo_uuid, question, asked_by=command.get("user_name"))
+        answer = await answer_repo_chat_question(repo.id, question, asked_by=command.get("user_name"))
         await respond(answer.answer)
 
     return app
