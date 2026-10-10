@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Burndown, type DeliveryForecast, type Sprint } from "@/lib/api";
+import { api, type Burndown, type DeliveryAccuracyReport, type DeliveryForecast, type Sprint } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
-import { Card, EmptyState, Input, LoadingState, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
+import { Badge, Card, EmptyState, Input, LoadingState, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
+
+const RISK_QUADRANT_LABELS: Record<string, { label: string; tone: "success" | "warning" | "danger" | "brand" }> = {
+  on_track: { label: "On track", tone: "success" },
+  capacity_mismatch: { label: "Capacity mismatch", tone: "warning" },
+  scope_creep: { label: "Scope creep", tone: "warning" },
+  overcommitted: { label: "Overcommitted", tone: "danger" },
+};
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -23,6 +30,9 @@ export default function SprintsPage() {
   const [forecast, setForecast] = useState<DeliveryForecast | null>(null);
   const [forecastStatus, setForecastStatus] = useState<"idle" | "loading" | "error">("idle");
   const [forecastEnabled, setForecastEnabled] = useState<boolean | null>(null);
+  const [accuracy, setAccuracy] = useState<DeliveryAccuracyReport | null>(null);
+  const [accuracyStatus, setAccuracyStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [accuracyEnabled, setAccuracyEnabled] = useState<boolean | null>(null);
 
   const [name, setName] = useState("");
   const [start, setStart] = useState(daysAgoISO(14));
@@ -49,11 +59,15 @@ export default function SprintsPage() {
     queueMicrotask(() => {
       if (selectedSprintId) api.getBurndown(selectedSprintId).then(setBurndown);
       setForecast(null);
+      setAccuracy(null);
     });
   }, [selectedSprintId]);
 
   useEffect(() => {
-    api.resolvedFeatureFlags(["delivery_forecast"]).then((r) => setForecastEnabled(r.flags.delivery_forecast ?? false));
+    api.resolvedFeatureFlags(["delivery_forecast", "delivery_accuracy"]).then((r) => {
+      setForecastEnabled(r.flags.delivery_forecast ?? false);
+      setAccuracyEnabled(r.flags.delivery_accuracy ?? false);
+    });
   }, []);
 
   async function handleForecast() {
@@ -64,6 +78,17 @@ export default function SprintsPage() {
       setForecastStatus("idle");
     } catch {
       setForecastStatus("error");
+    }
+  }
+
+  async function handleAccuracy() {
+    if (!selectedSprintId) return;
+    setAccuracyStatus("loading");
+    try {
+      setAccuracy(await api.getDeliveryAccuracy(selectedSprintId));
+      setAccuracyStatus("idle");
+    } catch {
+      setAccuracyStatus("error");
     }
   }
 
@@ -180,6 +205,45 @@ export default function SprintsPage() {
                 forecast.projection_note && <p className="text-[var(--text-dim)]">{forecast.projection_note}</p>
               )}
               <p className="mt-2 text-xs text-[var(--text-dim)]">{forecast.method}</p>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {selectedSprintId && accuracyEnabled && (
+        <Card className="mt-6">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-[var(--foreground)]">Planning &amp; Capacity Accuracy</h2>
+            <SecondaryButton onClick={handleAccuracy} disabled={accuracyStatus === "loading"}>
+              {accuracyStatus === "loading" ? "Computing…" : accuracy ? "Refresh" : "Compute"}
+            </SecondaryButton>
+          </div>
+          {accuracyStatus === "error" && <p className="mt-2 text-sm text-rose-600">Couldn&apos;t reach the API to compute accuracy for this sprint.</p>}
+          {accuracyStatus === "loading" && <div className="mt-3"><LoadingState /></div>}
+          {accuracy && (
+            <div className="mt-3 space-y-3">
+              {accuracy.risk_quadrant && (
+                <Badge tone={RISK_QUADRANT_LABELS[accuracy.risk_quadrant].tone}>
+                  {RISK_QUADRANT_LABELS[accuracy.risk_quadrant].label}
+                </Badge>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--text-dim)]">Planning accuracy</span>
+                <span className="font-semibold text-[var(--foreground)]">
+                  {accuracy.planning_accuracy.value ?? "—"}% {accuracy.planning_accuracy.band && `(${accuracy.planning_accuracy.band.replace("_", " ")})`}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--text-dim)]">Capacity accuracy</span>
+                <span className="font-semibold text-[var(--foreground)]">
+                  {accuracy.capacity_accuracy.value ?? "—"}% {accuracy.capacity_accuracy.band && `(${accuracy.capacity_accuracy.band.replace("_", " ")})`}
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-dim)]">
+                {accuracy.planned_completed_count} of {accuracy.planned_ticket_count} planned tickets done, plus{" "}
+                {accuracy.added_completed_count} unplanned — {accuracy.total_completed_count} total completed in this sprint&apos;s window.
+              </p>
+              <p className="text-xs text-[var(--text-dim)]">{accuracy.method_note}</p>
             </div>
           )}
         </Card>

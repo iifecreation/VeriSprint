@@ -47,12 +47,14 @@ from app.routers import (
     risk,
     roi,
     scim,
+    services,
     settings as settings_router,
     slack,
     sprints,
     sso,
     sso_config,
     standup,
+    teams,
     tickets,
     value_stream,
     work_units,
@@ -176,6 +178,8 @@ app.include_router(sso_config.router)
 app.include_router(scim.router)
 app.include_router(github_app.router)
 app.include_router(repos.router)
+app.include_router(teams.router)
+app.include_router(services.router)
 app.include_router(tickets.router)
 app.include_router(dashboard.router)
 app.include_router(standup.router)

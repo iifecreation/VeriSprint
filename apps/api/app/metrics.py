@@ -52,21 +52,35 @@ def _avg(values: list[float]) -> float | None:
 
 
 async def compute_efficiency_metrics(
-    db: AsyncSession, repo_ids: list[UUID], period_start: datetime, period_end: datetime
+    db: AsyncSession,
+    repo_ids: list[UUID],
+    period_start: datetime,
+    period_end: datetime,
+    author_logins: list[str] | None = None,
 ) -> EfficiencyMetrics:
+    """
+    `author_logins` (Phase 6/7 — People/Team segmentation, alongside the
+    existing Repo/Service filter every panel already has): scopes PR-level
+    metrics to these GitHub logins' own PRs, and Rework/Refactor Rate to
+    their own commits — one login for a person filter, several for a team.
+    Change Failure Rate and MTTR are never person/team-scoped — a deployment
+    isn't authored by one developer — so they're always computed repo-wide
+    regardless of this parameter.
+    """
     metrics = EfficiencyMetrics()
     if not repo_ids:
         return metrics
 
-    prs_result = await db.execute(
-        select(PullRequest).where(
-            PullRequest.repo_id.in_(repo_ids),
-            PullRequest.state == "merged",
-            PullRequest.merged_at.is_not(None),
-            PullRequest.merged_at >= period_start,
-            PullRequest.merged_at <= period_end,
-        )
-    )
+    pr_filters = [
+        PullRequest.repo_id.in_(repo_ids),
+        PullRequest.state == "merged",
+        PullRequest.merged_at.is_not(None),
+        PullRequest.merged_at >= period_start,
+        PullRequest.merged_at <= period_end,
+    ]
+    if author_logins:
+        pr_filters.append(PullRequest.author_github_login.in_(author_logins))
+    prs_result = await db.execute(select(PullRequest).where(*pr_filters))
     prs = list(prs_result.scalars().all())
     metrics.merged_pr_count = len(prs)
     # CFR/MTTR (Deployment-backed) and Rework/Refactor Rate (Commit-backed)
@@ -77,7 +91,7 @@ async def compute_efficiency_metrics(
     # genuinely need at least one merged PR.
     metrics.change_failure_rate_pct, metrics.mttr_hours = await _compute_cfr_mttr(db, repo_ids, period_start, period_end)
     metrics.rework_rate_pct, metrics.refactor_rate_pct = await _compute_rework_and_refactor_rate(
-        db, repo_ids, period_start, period_end
+        db, repo_ids, period_start, period_end, author_logins=author_logins
     )
     if not prs:
         return metrics
@@ -217,7 +231,11 @@ async def _compute_cfr_mttr(
 
 
 async def _compute_rework_and_refactor_rate(
-    db: AsyncSession, repo_ids: list[UUID], period_start: datetime, period_end: datetime
+    db: AsyncSession,
+    repo_ids: list[UUID],
+    period_start: datetime,
+    period_end: datetime,
+    author_logins: list[str] | None = None,
 ) -> tuple[float | None, float | None]:
     """
     Rework Rate (heuristic): the share of this period's added lines that land
@@ -237,15 +255,18 @@ async def _compute_rework_and_refactor_rate(
     return None for both rather than a misleading 0%.
     """
     lookback_start = period_start - timedelta(days=REWORK_LOOKBACK_DAYS)
-    result = await db.execute(
-        select(Commit)
-        .where(
-            Commit.repo_id.in_(repo_ids),
-            Commit.committed_at >= lookback_start,
-            Commit.committed_at <= period_end,
-        )
-        .order_by(Commit.committed_at)
-    )
+    commit_filters = [
+        Commit.repo_id.in_(repo_ids),
+        Commit.committed_at >= lookback_start,
+        Commit.committed_at <= period_end,
+    ]
+    # Only these authors' own commits are ever relevant — rework/refactor
+    # matching is keyed by each commit's own author (see by_author below), so
+    # fetching other authors' history for a scoped query would be wasted
+    # rows, not a correctness issue either way.
+    if author_logins:
+        commit_filters.append(Commit.author_github_login.in_(author_logins))
+    result = await db.execute(select(Commit).where(*commit_filters).order_by(Commit.committed_at))
     commits = [c for c in result.scalars().all() if c.touched_file_paths]
     if not commits:
         return None, None

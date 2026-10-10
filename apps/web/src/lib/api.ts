@@ -7,6 +7,23 @@ export type Repo = {
   default_branch: string;
   is_active: boolean;
   slack_channel_id: string | null;
+  service_id: string | null;
+};
+
+export type Team = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  member_github_logins: string[];
+  created_at: string;
+};
+
+export type Service = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  created_at: string;
+  repo_ids: string[];
 };
 
 export type ConfidenceScore = {
@@ -126,6 +143,13 @@ export type ReportSectionOption = {
   key: string;
   label: string;
   description: string;
+};
+
+export type ReportTemplateOption = {
+  key: string;
+  label: string;
+  description: string;
+  sections: string[];
 };
 
 export type PublicPortalReport = {
@@ -476,6 +500,20 @@ export type DeliveryForecast = {
   projection_note: string | null;
 };
 
+export type DeliveryRiskQuadrant = "on_track" | "capacity_mismatch" | "scope_creep" | "overcommitted";
+
+export type DeliveryAccuracyReport = {
+  sprint_id: string;
+  planned_ticket_count: number;
+  planned_completed_count: number;
+  added_completed_count: number;
+  total_completed_count: number;
+  planning_accuracy: BenchmarkedValue;
+  capacity_accuracy: BenchmarkedValue;
+  risk_quadrant: DeliveryRiskQuadrant | null;
+  method_note: string;
+};
+
 export type ContributorStat = {
   author_github_login: string;
   commit_count: number;
@@ -637,8 +675,19 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   listRepos: () => apiFetch<Repo[]>("/repos"),
-  updateRepo: (repoId: string, payload: { slack_channel_id?: string | null }) =>
+  updateRepo: (repoId: string, payload: { slack_channel_id?: string | null; service_id?: string | null }) =>
     apiFetch<Repo>(`/repos/${repoId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+
+  // --- Team & Service segmentation (Phase 7) ---
+  listTeams: () => apiFetch<Team[]>("/teams"),
+  createTeam: (name: string, memberGithubLogins: string[]) =>
+    apiFetch<Team>("/teams", { method: "POST", body: JSON.stringify({ name, member_github_logins: memberGithubLogins }) }),
+  updateTeam: (teamId: string, payload: { name?: string; member_github_logins?: string[] }) =>
+    apiFetch<Team>(`/teams/${teamId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteTeam: (teamId: string) => apiFetch<{ ok: boolean }>(`/teams/${teamId}`, { method: "DELETE" }),
+  listServices: () => apiFetch<Service[]>("/services"),
+  createService: (name: string) => apiFetch<Service>("/services", { method: "POST", body: JSON.stringify({ name }) }),
+  deleteService: (serviceId: string) => apiFetch<{ ok: boolean }>(`/services/${serviceId}`, { method: "DELETE" }),
 
   listTickets: (repoId: string) => apiFetch<Ticket[]>(`/tickets?repo_id=${repoId}`),
   getTicket: (ticketId: string) => apiFetch<Ticket>(`/tickets/${ticketId}`),
@@ -700,6 +749,7 @@ export const api = {
   generateOnboardingDoc: (repoId: string) =>
     apiFetch<ReportDocument>("/reports/onboarding-doc", { method: "POST", body: JSON.stringify({ repo_id: repoId }) }),
   listCustomReportSections: () => apiFetch<ReportSectionOption[]>("/reports/custom/sections"),
+  listReportTemplates: () => apiFetch<ReportTemplateOption[]>("/reports/custom/templates"),
   generateCustomReport: (repoId: string, periodStart: string, periodEnd: string, sections: string[]) =>
     apiFetch<ReportDocument>("/reports/custom", {
       method: "POST",
@@ -769,8 +819,12 @@ export const api = {
     apiFetch<{ portal_url: string }>("/billing/portal", { method: "POST", body: JSON.stringify({ return_url }) }),
   getDora: (repoId: string, periodStart: string, periodEnd: string) =>
     apiFetch<DORAMetrics>(`/dora?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
-  getEfficiency: (repoId: string, periodStart: string, periodEnd: string) =>
-    apiFetch<EfficiencyReport>(`/efficiency?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
+  getEfficiency: (repoId: string, periodStart: string, periodEnd: string, person?: string | null, teamId?: string | null) =>
+    apiFetch<EfficiencyReport>(
+      `/efficiency?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}` +
+        (person ? `&person=${encodeURIComponent(person)}` : "") +
+        (teamId ? `&team_id=${encodeURIComponent(teamId)}` : "")
+    ),
   getInvestmentProfile: (repoId: string, periodStart: string, periodEnd: string) =>
     apiFetch<InvestmentProfileReport>(`/allocation/profile?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
   getCodeHealth: (repoId: string, periodStart: string, periodEnd: string) =>
@@ -802,6 +856,7 @@ export const api = {
 
   // --- Delivery Forecast ---
   getDeliveryForecast: (sprintId: string) => apiFetch<DeliveryForecast>(`/forecast/${sprintId}`),
+  getDeliveryAccuracy: (sprintId: string) => apiFetch<DeliveryAccuracyReport>(`/sprints/${sprintId}/accuracy`),
 
   // --- AI Contribution Tracker ---
   getContributions: (repoId: string, periodStart: string, periodEnd: string) =>

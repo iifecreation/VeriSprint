@@ -162,6 +162,10 @@ class Repo(Base):
     # posts here. Left unset, no Slack digest is sent for this repo (we never
     # guess a channel).
     slack_channel_id: Mapped[str | None] = mapped_column(String(64))
+    # Set via PATCH /repos/{id} (Phase 7 Service segmentation) — which named
+    # Service this repo's code belongs to, if any. Null means "ungrouped,"
+    # not an error; most workspaces won't bother grouping a single repo.
+    service_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("services.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     workspace: Mapped[Workspace] = relationship(back_populates="repos")
@@ -897,3 +901,42 @@ class PricingPlan(Base):
     updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class Service(Base):
+    """
+    Data segmentation (Phase 7 competitor-parity): a named multi-repo
+    grouping — "which repos make up this logical service" — the Repo
+    dimension every panel already filters by, extended to span more than one
+    repo at a time. A repo belongs to at most one Service (`Repo.service_id`);
+    there's no many-to-many here because a repo being one team's one
+    service's code is the common case this is built for, not a repo shared
+    across services.
+    """
+
+    __tablename__ = "services"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class Team(Base):
+    """
+    Data segmentation (Phase 7 competitor-parity): a named group of GitHub
+    logins — the People dimension (see app/metrics.py's `authors` filter)
+    extended to a whole team at once instead of one person at a time. Plain
+    JSON list of logins, not a join table to `User` rows: most GitHub
+    contributors a workspace wants to group were never required to create a
+    VeriSprint account (same reasoning as Sprint.planned_ticket_keys being a
+    plain list rather than a join table).
+    """
+
+    __tablename__ = "teams"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    member_github_logins: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())

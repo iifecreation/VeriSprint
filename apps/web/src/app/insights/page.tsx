@@ -9,6 +9,7 @@ import {
   type EfficiencyReport,
   type InvestmentProfileReport,
   type RiskRadar,
+  type Team,
   type TeamGoal,
 } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
@@ -161,12 +162,54 @@ function BenchmarkStat({ label, stat }: { label: string; stat: BenchmarkedValue 
 
 function EfficiencyPanel({ repoId, start, end }: { repoId: string; start: string; end: string }) {
   const [data, setData] = useState<EfficiencyReport | null>(null);
+  const [person, setPerson] = useState("");
+  const [teamId, setTeamId] = useState("");
+  const [teams, setTeams] = useState<Team[]>([]);
+
   useEffect(() => {
-    api.getEfficiency(repoId, `${start}T00:00:00Z`, `${end}T23:59:59Z`).then(setData).catch(() => setData(null));
-  }, [repoId, start, end]);
-  if (!data) return <p className="mt-2 text-xs text-[var(--text-dim)]">Loading…</p>;
+    api.listTeams().then(setTeams).catch(() => setTeams([]));
+  }, []);
+
+  useEffect(() => {
+    const trimmed = person.trim();
+    api
+      .getEfficiency(repoId, `${start}T00:00:00Z`, `${end}T23:59:59Z`, trimmed || null, teamId || null)
+      .then(setData)
+      .catch(() => setData(null));
+  }, [repoId, start, end, person, teamId]);
+
   return (
     <div>
+      <input
+        value={person}
+        onChange={(e) => {
+          setPerson(e.target.value);
+          if (e.target.value) setTeamId("");
+        }}
+        placeholder="Filter by GitHub login (People segmentation)"
+        className="mb-2 w-full rounded-md border border-[var(--surface-raised)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--foreground)] placeholder:text-[var(--text-dim)]"
+      />
+      {teams.length > 0 && (
+        <select
+          value={teamId}
+          onChange={(e) => {
+            setTeamId(e.target.value);
+            if (e.target.value) setPerson("");
+          }}
+          className="mb-2 w-full rounded-md border border-[var(--surface-raised)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--foreground)]"
+        >
+          <option value="">No team filter (Team segmentation)</option>
+          {teams.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name} ({t.member_github_logins.length})
+            </option>
+          ))}
+        </select>
+      )}
+      {!data ? (
+        <p className="mt-2 text-xs text-[var(--text-dim)]">Loading…</p>
+      ) : (
+        <>
       <Stat label="Merged PRs" value={data.merged_pr_count} />
       <BenchmarkStat label="PR size" stat={data.pr_size_lines} />
       <BenchmarkStat label="Coding time" stat={data.coding_time_hours} />
@@ -185,6 +228,8 @@ function EfficiencyPanel({ repoId, start, end }: { repoId: string; start: string
         value={data.prs_merged_without_review_pct !== null ? `${data.prs_merged_without_review_pct}%` : null}
       />
       <p className="mt-3 text-xs text-[var(--text-dim)]">{data.method_note}</p>
+        </>
+      )}
     </div>
   );
 }

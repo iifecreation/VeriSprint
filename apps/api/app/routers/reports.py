@@ -16,7 +16,14 @@ from app.auth.dependencies import ensure_workspace_access, get_internal_user, ge
 from app.db.models import ClientPortalLink, Repo, ReportDocument, ReportType, Sprint, User
 from app.db.session import get_db
 from app.queue.client import enqueue
-from app.schemas import GenerateCustomReportRequest, GenerateReportRequest, ReportDocumentOut, ReportSectionOption
+from app.schemas import (
+    GenerateCustomReportRequest,
+    GenerateReportRequest,
+    ReportDocumentOut,
+    ReportSectionOption,
+    ReportTemplateOption,
+)
+from app.workers.reports import REPORT_TEMPLATES
 from app.billing_access import require_active_access
 
 router = APIRouter(prefix="/reports", tags=["reports"], dependencies=[Depends(require_active_access)])
@@ -41,6 +48,22 @@ CUSTOM_REPORT_SECTIONS: list[ReportSectionOption] = [
     ReportSectionOption(
         key="ai_tool_cost", label="AI Tool Spend",
         description="Current active AI coding tool subscriptions and their normalized monthly cost.",
+    ),
+    ReportSectionOption(
+        key="engineering_health", label="Engineering Health",
+        description="Git Efficiency Metrics (cycle time, PR size, rework rate, CFR, MTTR) with benchmark bands, same as the /insights panel.",
+    ),
+    ReportSectionOption(
+        key="investment_profile", label="Investment Profile",
+        description="New Value / Feature Enhancements / Developer Experience / Keeping the Lights On split, same as the /insights panel.",
+    ),
+    ReportSectionOption(
+        key="delivery_risk", label="Delivery Predictability",
+        description="Planning & Capacity Accuracy and the delivery-risk quadrant for sprints overlapping this period.",
+    ),
+    ReportSectionOption(
+        key="goals_progress", label="Goals Progress",
+        description="Active Team Goals (org-level and cascading) with real progress and off-track flags.",
     ),
 ]
 _VALID_SECTION_KEYS = {s.key for s in CUSTOM_REPORT_SECTIONS}
@@ -81,6 +104,14 @@ async def get_report(
 @router.get("/custom/sections", response_model=list[ReportSectionOption])
 async def list_custom_report_sections(user: User = Depends(get_internal_user)) -> list[ReportSectionOption]:
     return CUSTOM_REPORT_SECTIONS
+
+
+@router.get("/custom/templates", response_model=list[ReportTemplateOption])
+async def list_report_templates(user: User = Depends(get_internal_user)) -> list[ReportTemplateOption]:
+    """Stakeholder-specific presets (Phase 6) — pure convenience over the
+    same Report Builder mechanism above: picking one just pre-fills which
+    sections POST /reports/custom gets, same generation path either way."""
+    return [ReportTemplateOption(key=key, **template) for key, template in REPORT_TEMPLATES.items()]
 
 
 @router.post("/custom", response_model=ReportDocumentOut)

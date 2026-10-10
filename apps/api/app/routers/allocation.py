@@ -10,12 +10,13 @@ classification and aggregation lives in app/investment.py so app/goals.py can
 target a category's share as a goal metric without importing this router.
 """
 from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import get_repo_for_user, get_workspace_for_user, require_feature_flag
+from app.auth.dependencies import get_repo_ids_for_scope, get_workspace_for_user, require_feature_flag
 from app.benchmarks import INVESTMENT_PROFILE_TARGETS
 from app.db.models import Commit, Repo, Workspace
 from app.db.session import get_db
@@ -77,10 +78,12 @@ async def get_allocation_report(
 async def get_investment_profile(
     period_start: datetime,
     period_end: datetime,
-    repo: Repo = Depends(get_repo_for_user),
+    repo_ids: list[UUID] = Depends(get_repo_ids_for_scope),
     db: AsyncSession = Depends(get_db),
 ) -> InvestmentProfileReport:
-    profile = await compute_investment_profile(db, [repo.id], period_start, period_end)
+    """Phase 7: pass `service_id` instead of `repo_id` to scope by a named
+    multi-repo Service — see get_repo_ids_for_scope."""
+    profile = await compute_investment_profile(db, repo_ids, period_start, period_end)
     total_categorized_lines = sum(profile.lines_by_category.values())
     total_lines = total_categorized_lines + profile.uncategorized_lines
 
@@ -95,7 +98,7 @@ async def get_investment_profile(
         for cat in profile.lines_by_category
     ]
 
-    m = await compute_efficiency_metrics(db, [repo.id], period_start, period_end)
+    m = await compute_efficiency_metrics(db, repo_ids, period_start, period_end)
 
     return InvestmentProfileReport(
         period_start=period_start,

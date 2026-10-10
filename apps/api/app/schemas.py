@@ -14,10 +14,12 @@ class RepoOut(BaseModel):
     default_branch: str
     is_active: bool
     slack_channel_id: str | None = None
+    service_id: uuid.UUID | None = None
 
 
 class RepoUpdate(BaseModel):
     slack_channel_id: str | None = None
+    service_id: uuid.UUID | None = None
 
 
 class EvidenceItemOut(BaseModel):
@@ -192,6 +194,13 @@ class ReportSectionOption(BaseModel):
     key: str
     label: str
     description: str
+
+
+class ReportTemplateOption(BaseModel):
+    key: str
+    label: str
+    description: str
+    sections: list[str]
 
 
 class AccuracyPoint(BaseModel):
@@ -923,3 +932,62 @@ class InvestmentProfileReport(BaseModel):
         "percentages are a reasonable midpoint of publicly-published industry convention, not a "
         "claim about where your org should be — see app/benchmarks.py."
     )
+
+
+# --- Planning & Capacity Accuracy (Phase 5 competitor-parity) -----------------
+
+class DeliveryAccuracyReport(BaseModel):
+    sprint_id: uuid.UUID
+    planned_ticket_count: int
+    planned_completed_count: int
+    added_completed_count: int
+    total_completed_count: int
+    planning_accuracy: BenchmarkedValue
+    capacity_accuracy: BenchmarkedValue
+    risk_quadrant: Literal["on_track", "capacity_mismatch", "scope_creep", "overcommitted"] | None
+    method_note: str = (
+        "Planning Accuracy = planned tickets that reached done, within this sprint's window, over all "
+        "planned tickets. Capacity Accuracy = ALL tickets (planned + added mid-sprint) that reached done "
+        "in-window, over planned tickets — it can be high even when Planning Accuracy is low if unplanned "
+        "work displaced planned work (LinearB's 'scope creep' quadrant). Both are null when the sprint had "
+        "no planned tickets. A ticket with no TicketStatusChange history (predates that table) still counts "
+        "toward Planning Accuracy if it's currently done, but never toward Capacity Accuracy — there's no "
+        "timestamp confirming it finished specifically within this window. See app/delivery_risk.py and "
+        "app/benchmarks.py's classify_delivery_risk_quadrant."
+    )
+
+
+# --- Team & Service segmentation (Phase 7 competitor-parity) ------------------
+
+class ServiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    name: str
+    created_at: datetime
+    repo_ids: list[uuid.UUID] = []
+
+
+class ServiceCreate(BaseModel):
+    name: str
+
+
+class TeamOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    name: str
+    member_github_logins: list[str]
+    created_at: datetime
+
+
+class TeamCreate(BaseModel):
+    name: str
+    member_github_logins: list[str] = []
+
+
+class TeamUpdate(BaseModel):
+    name: str | None = None
+    member_github_logins: list[str] | None = None

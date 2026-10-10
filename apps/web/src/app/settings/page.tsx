@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type CurrentUser, type Integration, type MCPConfig, type PricingPlan, type Subscription, type WorkspaceSSOConfig, type WorkspaceSettings } from "@/lib/api";
+import {
+  api,
+  type CurrentUser,
+  type Integration,
+  type MCPConfig,
+  type PricingPlan,
+  type Repo,
+  type Service,
+  type Subscription,
+  type Team,
+  type WorkspaceSSOConfig,
+  type WorkspaceSettings,
+} from "@/lib/api";
 import { useAccessTokenClaims } from "@/lib/auth";
 import { API_BASE_URL } from "@/lib/config";
 import { Badge, Card, Input, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
@@ -82,6 +94,7 @@ export default function SettingsPage() {
 
       <BillingSection />
       <TeamSection />
+      <SegmentationSection />
       <IntegrationsSection workspaceId={workspaceId} />
       <SSOConfigSection />
       <MCPConfigSection />
@@ -316,6 +329,139 @@ function TeamSection() {
             </div>
           );
         })}
+      </div>
+    </Card>
+  );
+}
+
+function SegmentationSection() {
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [repos, setRepos] = useState<Repo[]>([]);
+  const [teamName, setTeamName] = useState("");
+  const [teamLogins, setTeamLogins] = useState("");
+  const [serviceName, setServiceName] = useState("");
+
+  async function refresh() {
+    const [t, s, r] = await Promise.all([api.listTeams(), api.listServices(), api.listRepos()]);
+    setTeams(t);
+    setServices(s);
+    setRepos(r);
+  }
+
+  useEffect(() => {
+    // Deferred to a microtask — see dashboard/page.tsx for why.
+    queueMicrotask(() => {
+      refresh();
+    });
+  }, []);
+
+  async function handleCreateTeam() {
+    if (!teamName.trim()) return;
+    const logins = teamLogins.split(",").map((l) => l.trim()).filter(Boolean);
+    await api.createTeam(teamName.trim(), logins);
+    setTeamName("");
+    setTeamLogins("");
+    await refresh();
+  }
+
+  async function handleCreateService() {
+    if (!serviceName.trim()) return;
+    await api.createService(serviceName.trim());
+    setServiceName("");
+    await refresh();
+  }
+
+  async function handleAssignService(repoId: string, serviceId: string) {
+    await api.updateRepo(repoId, { service_id: serviceId || null });
+    await refresh();
+  }
+
+  return (
+    <Card className="mt-8 space-y-6">
+      <div>
+        <h2 className="font-semibold text-[var(--foreground)]">Segmentation (Teams &amp; Services)</h2>
+        <p className="mt-1 text-xs text-[var(--text-dim)]">
+          Teams group GitHub logins (filter Git Efficiency Metrics by team instead of one person); Services group
+          repos (scope dashboards by a named multi-repo service instead of one repo).
+        </p>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-[var(--text-muted)]">Teams</h3>
+        <div className="mt-2 space-y-2">
+          {teams.length === 0 && <p className="text-sm text-[var(--text-dim)]">No teams yet.</p>}
+          {teams.map((t) => (
+            <div key={t.id} className="flex items-center justify-between rounded-xl bg-[var(--background)] px-3 py-2 text-sm">
+              <div>
+                <span className="font-medium text-[var(--text-muted)]">{t.name}</span>
+                <span className="ml-2 text-xs text-[var(--text-dim)]">{t.member_github_logins.join(", ") || "no members"}</span>
+              </div>
+              <SecondaryButton className="px-3 py-1 text-xs" onClick={() => api.deleteTeam(t.id).then(refresh)}>
+                Delete
+              </SecondaryButton>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-[var(--text-dim)]">Team name</label>
+            <Input className="mt-1.5" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Platform Team" />
+          </div>
+          <div className="min-w-[220px] flex-1">
+            <label className="block text-xs font-semibold text-[var(--text-dim)]">GitHub logins (comma-separated)</label>
+            <Input className="mt-1.5 w-full" value={teamLogins} onChange={(e) => setTeamLogins(e.target.value)} placeholder="alice, bob" />
+          </div>
+          <PrimaryButton onClick={handleCreateTeam}>Create team</PrimaryButton>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-[var(--text-muted)]">Services</h3>
+        <div className="mt-2 space-y-2">
+          {services.length === 0 && <p className="text-sm text-[var(--text-dim)]">No services yet.</p>}
+          {services.map((s) => (
+            <div key={s.id} className="flex items-center justify-between rounded-xl bg-[var(--background)] px-3 py-2 text-sm">
+              <div>
+                <span className="font-medium text-[var(--text-muted)]">{s.name}</span>
+                <span className="ml-2 text-xs text-[var(--text-dim)]">{s.repo_ids.length} repo(s)</span>
+              </div>
+              <SecondaryButton className="px-3 py-1 text-xs" onClick={() => api.deleteService(s.id).then(refresh)}>
+                Delete
+              </SecondaryButton>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-end gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-[var(--text-dim)]">Service name</label>
+            <Input className="mt-1.5" value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="Checkout Service" />
+          </div>
+          <PrimaryButton onClick={handleCreateService}>Create service</PrimaryButton>
+        </div>
+
+        {services.length > 0 && repos.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-[var(--text-dim)]">Assign repos to a service</p>
+            <div className="mt-2 space-y-1.5">
+              {repos.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate text-[var(--text-muted)]">{r.full_name}</span>
+                  <select
+                    className="rounded-md border border-[var(--surface-raised)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--foreground)]"
+                    value={r.service_id ?? ""}
+                    onChange={(e) => handleAssignService(r.id, e.target.value)}
+                  >
+                    <option value="">Ungrouped</option>
+                    {services.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   );

@@ -5,16 +5,22 @@ Review Depth, PRs Merged Without Review, Rework Rate, and Refactor Rate —
 the leading-indicator layer DORA alone doesn't cover. See app/metrics.py for
 how each is computed and app/benchmarks.py for the Elite/Good/Fair/Needs
 Focus bands.
+
+Phase 7 adds Team/Service segmentation alongside the Repo/Person dimensions
+Phase 6 already had — pass `service_id` instead of `repo_id` to scope by a
+named multi-repo Service, and/or `team_id` instead of `person` to scope by a
+named group of GitHub logins instead of one.
 """
 from datetime import datetime
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import get_repo_for_user, require_feature_flag
+from app.auth.dependencies import ensure_workspace_access, get_internal_user, get_repo_ids_for_scope, require_feature_flag
 from app.benchmarks import classify
 from app.billing_access import require_active_access
-from app.db.models import Repo
+from app.db.models import Team, User
 from app.db.session import get_db
 from app.metrics import compute_efficiency_metrics
 from app.schemas import BenchmarkedValue, EfficiencyReport
@@ -30,10 +36,31 @@ def _bv(metric_key: str, value: float | None, unit: str = "") -> BenchmarkedValu
 async def get_efficiency_report(
     period_start: datetime,
     period_end: datetime,
-    repo: Repo = Depends(get_repo_for_user),
+    person: str | None = None,
+    team_id: UUID | None = None,
+    repo_ids: list[UUID] = Depends(get_repo_ids_for_scope),
+    user: User = Depends(get_internal_user),
     db: AsyncSession = Depends(get_db),
 ) -> EfficiencyReport:
-    m = await compute_efficiency_metrics(db, [repo.id], period_start, period_end)
+    """`person`/`team_id` (Phase 6/7 — People/Team segmentation): at most one
+    of the two — a single GitHub login, or a named Team resolved to its
+    member logins — scoping every PR-level metric to just those people's own
+    PRs/commits. Omit both for the full scope's numbers (unchanged default
+    behavior)."""
+    if person and team_id:
+        raise HTTPException(status_code=400, detail="Provide at most one of person or team_id")
+
+    author_logins: list[str] | None = None
+    if person:
+        author_logins = [person]
+    elif team_id:
+        team = await db.get(Team, team_id)
+        if team is None:
+            raise HTTPException(status_code=404, detail="Team not found")
+        ensure_workspace_access(user, team.workspace_id)
+        author_logins = team.member_github_logins or []
+
+    m = await compute_efficiency_metrics(db, repo_ids, period_start, period_end, author_logins=author_logins)
 
     return EfficiencyReport(
         period_start=period_start,

@@ -178,7 +178,11 @@ every outstanding token for that user, not just future ones.
 | Cross-file impact map (Phase 2) | `GET /tickets/{id}/impact-map` | — (API only) |
 | Client Proof-of-Work Portal (5.2) | `routers/reports.py`, `routers/client_portal.py`, `ClientPortalLink` | `/reports`, public `/portal/[token]` |
 | Investor Update Generator (5.3) | `workers/reports.py` | `/reports` |
+| **Stakeholder Report Templates** (Leadership Update / Engineering Team Update presets over Report Builder) | `workers/reports.py` (`REPORT_TEMPLATES`), `routers/reports.py` (`/custom/templates`) | `/reports` |
+| **People segmentation** (filter Git Efficiency Metrics by GitHub login or Team) | `metrics.py` (`author_logins` param), `routers/efficiency.py` | `/insights` |
+| **Team & Service segmentation** (named group of GitHub logins / named multi-repo grouping) | `routers/teams.py`, `routers/services.py`, `auth/dependencies.py` (`get_repo_ids_for_scope`) | `/settings`, `/insights` |
 | Confidence-Weighted Burndown (5.7) | `routers/sprints.py` | `/sprints` |
+| **Planning & Capacity Accuracy** (2x2 delivery-risk quadrant) | `delivery_risk.py`, `routers/sprints.py` (`/accuracy`) | `/sprints` |
 | Onboarding Doc Generator (5.8) | `workers/reports.py` + `integrations/github_client.py` | `/reports` |
 | Async Standup Replacement + ROI (5.4) | `routers/roi.py` | `/roi` |
 | Anomaly check-in nudges (5.9) | `workers/anomaly.py` | flags on `/dashboard` |
@@ -343,7 +347,36 @@ same head commit never re-approved) were verified the same way end-to-end
 against the real database, with only the GitHub write calls themselves
 mocked — there's no live GitHub App installation with write permissions in
 this environment to exercise `add_labels`/`request_reviewers`/
-`approve_pull_request` against a real repo, see below.
+`approve_pull_request` against a real repo, see below. Planning & Capacity
+Accuracy (`delivery_risk.py`) was verified the same way too — four seeded
+sprints, one per named risk posture (on-track, scope creep, overcommitted,
+capacity mismatch/under-committed), each driven through the real
+`compute_delivery_accuracy` + `classify_delivery_risk_quadrant` end-to-end
+and confirmed to land in exactly the expected quadrant. The four new report
+sections (`engineering_health`, `investment_profile`, `delivery_risk`,
+`goals_progress`) and People segmentation's `author_logins` filter on Git
+Efficiency Metrics were each checked the same way against real seeded data,
+including confirming the per-person numbers actually differ between two
+different authors' PRs rather than silently returning the repo-wide total.
+
+All four of LinearB's data-segmentation dimensions are now real: Repo
+(every panel already had it), People (a GitHub login filter on Git
+Efficiency Metrics), Team (a named group of GitHub logins — `Team` model,
+`routers/teams.py`, resolves to the same `author_logins` filter), and
+Service (a named multi-repo grouping — `Service` model,
+`Repo.service_id`, `routers/services.py`, resolves to a `repo_ids` list via
+`get_repo_ids_for_scope`). Team/Service were verified against real seeded
+data too: a Service correctly scoped Efficiency Metrics to its member repos
+only (excluding an ungrouped repo in the same workspace), and a Team
+correctly scoped metrics to its members' own PRs across multiple repos
+(excluding two non-member authors) — both via the actual
+`get_repo_ids_for_scope` dependency and `compute_efficiency_metrics`, not a
+reimplementation. Team/Service CRUD and repo-to-Service assignment are in
+`/settings`; the Team filter is wired into the `/insights` Efficiency panel.
+Service-scoped querying (`service_id` as an alternative to `repo_id`) is
+live on `/efficiency` and `/allocation/profile` but not yet wired into any
+page's UI — an API-only capability for now, same as a few other
+already-shipped features document.
 
 What hasn't run against real external services in this environment, because
 doing so needs credentials only you can provide:

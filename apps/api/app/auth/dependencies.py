@@ -11,10 +11,11 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import TokenError, decode_token
-from app.db.models import Repo, User, UserRole, Workspace, WorkspaceStatus
+from app.db.models import Repo, Service, User, UserRole, Workspace, WorkspaceStatus
 from app.db.session import get_db
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -102,6 +103,35 @@ async def get_repo_for_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repo not found")
     ensure_workspace_access(user, repo.workspace_id)
     return repo
+
+
+async def get_repo_ids_for_scope(
+    repo_id: UUID | None = None,
+    service_id: UUID | None = None,
+    user: User = Depends(get_internal_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[UUID]:
+    """
+    Resolve either a single `repo_id` or a `service_id` (Phase 7 Service
+    segmentation — a named multi-repo grouping, see Service/Repo.service_id)
+    to a `list[UUID]`, for endpoints whose underlying computation already
+    takes `repo_ids: list[UUID]` (compute_efficiency_metrics,
+    compute_investment_profile). Exactly one of the two must be given —
+    there's no "all repos" default, same discipline as `get_repo_for_user`
+    never guessing a repo.
+    """
+    if (repo_id is None) == (service_id is None):
+        raise HTTPException(status_code=400, detail="Provide exactly one of repo_id or service_id")
+    if repo_id is not None:
+        repo = await get_repo_for_user(repo_id, user, db)
+        return [repo.id]
+
+    service = await db.get(Service, service_id)
+    if service is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
+    ensure_workspace_access(user, service.workspace_id)
+    result = await db.execute(select(Repo.id).where(Repo.service_id == service.id))
+    return [r for (r,) in result.all()]
 
 
 async def get_workspace_for_user(

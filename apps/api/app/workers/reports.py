@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from app.ai_signals import is_ai_assisted
 from app.audit import record_audit
+from app.benchmarks import classify, classify_delivery_risk_quadrant
 from app.db.models import (
     AIToolSubscription,
     Commit,
@@ -21,12 +22,17 @@ from app.db.models import (
     ReportDocument,
     Repo,
     Sprint,
+    TeamGoal,
     Ticket,
     Workspace,
 )
 from app.db.session import AsyncSessionLocal
+from app.delivery_risk import compute_delivery_accuracy
+from app.goals import GOAL_METRIC_COMPUTERS, compute_progress_pct, is_goal_breaching
 from app.integrations.github_client import fetch_repo_tree
 from app.integrations.llm_client import draft_report
+from app.investment import compute_investment_profile
+from app.metrics import compute_efficiency_metrics
 from app.routers.ai_cost import _is_active as _subscription_is_active
 from app.routers.ai_cost import _monthly_cost as _subscription_monthly_cost
 from app.routers.capitalization import _classify as _classify_ticket
@@ -275,10 +281,137 @@ async def _section_ai_tool_cost(db, repo_id: UUID) -> str:
     return "\n".join(lines)
 
 
+async def _section_engineering_health(db, repo_id: UUID, period_start: datetime, period_end: datetime) -> str:
+    """Phase 6: the Git Efficiency Metrics panel's numbers, in prose form —
+    same compute_efficiency_metrics call, same benchmark bands, never a
+    second, drifting copy of the math."""
+    m = await compute_efficiency_metrics(db, [repo_id], period_start, period_end)
+    lines = ["**Engineering Health**", "", f"{m.merged_pr_count} PR(s) merged in this period."]
+
+    def _line(label: str, value, unit: str, metric_key: str) -> None:
+        if value is None:
+            return
+        band = classify(metric_key, value)
+        band_text = f" ({band.replace('_', ' ')})" if band else ""
+        lines.append(f"- {label}: {value}{unit}{band_text}")
+
+    _line("Cycle time", m.cycle_time_hours, "h", "cycle_time_hours")
+    _line("PR size", m.pr_size_lines, " lines", "pr_size_lines")
+    _line("Rework rate", m.rework_rate_pct, "%", "rework_rate_pct")
+    _line("Change failure rate", m.change_failure_rate_pct, "%", "change_failure_rate_pct")
+    _line("MTTR", m.mttr_hours, "h", "mttr_hours")
+    if m.prs_merged_without_review_pct is not None:
+        lines.append(f"- PRs merged without review: {m.prs_merged_without_review_pct}%")
+    return "\n".join(lines)
+
+
+async def _section_investment_profile(db, repo_id: UUID, period_start: datetime, period_end: datetime) -> str:
+    """Phase 6: the Investment Profile panel's category breakdown, in prose
+    form — same compute_investment_profile call that /insights uses."""
+    profile = await compute_investment_profile(db, [repo_id], period_start, period_end)
+    total = sum(profile.lines_by_category.values())
+    if not total and not profile.uncategorized_lines:
+        return "**Investment Profile**\n\nNo ticket-linked commit activity in this period to categorize."
+    lines = ["**Investment Profile**", ""]
+    labels = {
+        "new_value": "New Value", "feature_enhancements": "Feature Enhancements",
+        "developer_experience": "Developer Experience", "keeping_the_lights_on": "Keeping the Lights On",
+    }
+    for category, label in labels.items():
+        pct = profile.pct_of_categorized(category)
+        if pct is not None:
+            lines.append(f"- {label}: {pct}%")
+    return "\n".join(lines)
+
+
+async def _section_delivery_risk(db, repo_id: UUID, period_start: datetime, period_end: datetime) -> str:
+    """Phase 6: Planning & Capacity Accuracy for the sprint(s) overlapping
+    this report's period — same compute_delivery_accuracy /sprints uses."""
+    sprints_result = await db.execute(
+        select(Sprint).where(
+            Sprint.repo_id == repo_id, Sprint.start_date <= period_end, Sprint.end_date >= period_start
+        ).order_by(Sprint.start_date.desc())
+    )
+    sprints = list(sprints_result.scalars().all())
+    if not sprints:
+        return "**Delivery Predictability**\n\nNo sprint overlaps this report's period."
+
+    lines = ["**Delivery Predictability**", ""]
+    for sprint in sprints:
+        acc = await compute_delivery_accuracy(db, sprint)
+        quadrant = classify_delivery_risk_quadrant(acc.planning_accuracy_pct, acc.capacity_accuracy_pct)
+        quadrant_text = f" — {quadrant.replace('_', ' ')}" if quadrant else ""
+        planning_text = f"{acc.planning_accuracy_pct}%" if acc.planning_accuracy_pct is not None else "n/a"
+        capacity_text = f"{acc.capacity_accuracy_pct}%" if acc.capacity_accuracy_pct is not None else "n/a"
+        lines.append(
+            f"- {sprint.name}: Planning Accuracy {planning_text}, Capacity Accuracy {capacity_text}{quadrant_text} "
+            f"({acc.planned_completed_count}/{acc.planned_ticket_count} planned tickets done, "
+            f"{acc.added_completed_count} unplanned done)"
+        )
+    return "\n".join(lines)
+
+
+async def _section_goals_progress(db, repo_id: UUID, period_start: datetime, period_end: datetime) -> str:
+    """Phase 6: active Team Goals (org-level and cascading) whose period
+    overlaps this report's period, with the same direction-aware progress
+    math /insights' Goals panel uses."""
+    repo = await db.get(Repo, repo_id)
+    if repo is None:
+        return "**Goals**\n\nRepo not found."
+    result = await db.execute(
+        select(TeamGoal).where(
+            TeamGoal.workspace_id == repo.workspace_id,
+            TeamGoal.period_start <= period_end, TeamGoal.period_end >= period_start,
+        ).order_by(TeamGoal.parent_goal_id.is_(None).desc(), TeamGoal.period_start)
+    )
+    goals = list(result.scalars().all())
+    if not goals:
+        return "**Goals**\n\nNo active goals for this period."
+
+    lines = ["**Goals**", ""]
+    for goal in goals:
+        computer = GOAL_METRIC_COMPUTERS.get(goal.metric_key)
+        current = await computer(db, goal.workspace_id, goal.repo_id, goal.period_start, goal.period_end) if computer else None
+        progress = compute_progress_pct(goal.metric_key, current, goal.target_value)
+        breaching = is_goal_breaching(progress, goal.period_start, goal.period_end, datetime.now(timezone.utc))
+        prefix = "  ↳ " if goal.parent_goal_id else "- "
+        status = " — OFF TRACK" if breaching else ""
+        progress_text = f"{progress}%" if progress is not None else "n/a"
+        lines.append(f"{prefix}{goal.name}: {current} / {goal.target_value} ({progress_text}){status}")
+    return "\n".join(lines)
+
+
 _CUSTOM_SECTION_BUILDERS = {
     "shipped_activity": _section_shipped_activity,
     "cost_capitalization": _section_cost_capitalization,
     "ai_contribution": _section_ai_contribution,
+    "engineering_health": _section_engineering_health,
+    "investment_profile": _section_investment_profile,
+    "delivery_risk": _section_delivery_risk,
+    "goals_progress": _section_goals_progress,
+}
+
+# Phase 6: pre-selected section bundles for a given stakeholder audience —
+# pure convenience over the same Report Builder/custom_sections mechanism
+# above (see routers/reports.py's GET /reports/custom/templates), not a
+# separate report type or generation path.
+REPORT_TEMPLATES: dict[str, dict] = {
+    "leadership_update": {
+        "label": "Leadership Update",
+        "description": (
+            "Business-impact framing for executives/the board: what shipped, delivery predictability, "
+            "where engineering investment went, AI spend. Minimal technical detail."
+        ),
+        "sections": ["shipped_activity", "delivery_risk", "investment_profile", "cost_capitalization", "ai_tool_cost"],
+    },
+    "engineering_team_update": {
+        "label": "Engineering Team Update",
+        "description": (
+            "Operational detail for engineering managers and teams: efficiency benchmarks, goal progress, "
+            "delivery risk, AI-assisted contribution."
+        ),
+        "sections": ["engineering_health", "goals_progress", "delivery_risk", "ai_contribution", "shipped_activity"],
+    },
 }
 
 

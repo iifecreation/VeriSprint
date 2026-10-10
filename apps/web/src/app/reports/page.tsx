@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type ReportDocument, type ReportSectionOption, type Sprint } from "@/lib/api";
+import { api, type ReportDocument, type ReportSectionOption, type ReportTemplateOption, type Sprint } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
 import { Badge, Card, EmptyState, Input, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
 
@@ -30,12 +30,21 @@ export default function ReportsPage() {
   const [busy, setBusy] = useState(false);
   const [sectionOptions, setSectionOptions] = useState<ReportSectionOption[]>([]);
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [templates, setTemplates] = useState<ReportTemplateOption[]>([]);
+  const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
 
   useEffect(() => {
     api.listCustomReportSections().then(setSectionOptions);
+    api.listReportTemplates().then(setTemplates);
   }, []);
 
+  function applyTemplate(template: ReportTemplateOption) {
+    setSelectedSections(template.sections);
+    setActiveTemplate(template.key);
+  }
+
   function toggleSection(key: string) {
+    setActiveTemplate(null);
     setSelectedSections((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   }
 
@@ -102,6 +111,27 @@ export default function ReportsPage() {
           Pick exactly which real sections go in — no LLM rewrite, each section is computed directly from the same
           data as its standalone report.
         </p>
+
+        {templates.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {templates.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                title={t.description}
+                onClick={() => applyTemplate(t)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                  activeTemplate === t.key
+                    ? "border-[var(--accent-neon-hover)] bg-[var(--accent-neon-hover)]/10 text-[var(--foreground)]"
+                    : "border-[var(--line)] text-[var(--text-muted)] hover:bg-[var(--background)]"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {sectionOptions.map((s) => (
             <label key={s.key} className="flex cursor-pointer items-start gap-2 rounded-lg border border-[var(--line)] p-2.5 text-sm hover:bg-[var(--background)]">

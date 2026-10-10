@@ -3,6 +3,10 @@ Sprints + Confidence-Weighted Burndown (spec Section 5.7): a burndown built
 from real ConfidenceScore.computed_at history rather than self-reported
 percentages. No point is ever synthesized — the chart only covers days that
 have actually happened, and every value is a real sum over real scores.
+
+Also hosts Planning & Capacity Accuracy (Phase 5 competitor-parity, gated
+behind the `delivery_accuracy` FeatureFlag unlike the core sprint/burndown
+endpoints above) — see app/delivery_risk.py.
 """
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -11,10 +15,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import ensure_workspace_access, get_internal_user, get_repo_for_user
+from app.auth.dependencies import ensure_workspace_access, get_internal_user, get_repo_for_user, require_feature_flag
+from app.benchmarks import classify, classify_capacity_accuracy, classify_delivery_risk_quadrant
 from app.db.models import ConfidenceScore, Repo, Sprint, Ticket, User
 from app.db.session import get_db
-from app.schemas import BurndownOut, BurndownPoint, SprintCreate, SprintOut
+from app.delivery_risk import compute_delivery_accuracy
+from app.schemas import BenchmarkedValue, BurndownOut, BurndownPoint, DeliveryAccuracyReport, SprintCreate, SprintOut
 from app.billing_access import require_active_access
 
 router = APIRouter(prefix="/sprints", tags=["sprints"], dependencies=[Depends(require_active_access)])
@@ -104,3 +110,31 @@ async def get_burndown(sprint: Sprint = Depends(_sprint_for_user), db: AsyncSess
         day += timedelta(days=1)
 
     return BurndownOut(sprint=SprintOut.model_validate(sprint), points=points)
+
+
+@router.get(
+    "/{sprint_id}/accuracy", response_model=DeliveryAccuracyReport,
+    dependencies=[Depends(require_feature_flag("delivery_accuracy"))],
+)
+async def get_delivery_accuracy(
+    sprint: Sprint = Depends(_sprint_for_user), db: AsyncSession = Depends(get_db)
+) -> DeliveryAccuracyReport:
+    accuracy = await compute_delivery_accuracy(db, sprint)
+    return DeliveryAccuracyReport(
+        sprint_id=sprint.id,
+        planned_ticket_count=accuracy.planned_ticket_count,
+        planned_completed_count=accuracy.planned_completed_count,
+        added_completed_count=accuracy.added_completed_count,
+        total_completed_count=accuracy.total_completed_count,
+        planning_accuracy=BenchmarkedValue(
+            value=accuracy.planning_accuracy_pct,
+            band=classify("planning_accuracy_pct", accuracy.planning_accuracy_pct),
+            unit="%",
+        ),
+        capacity_accuracy=BenchmarkedValue(
+            value=accuracy.capacity_accuracy_pct,
+            band=classify_capacity_accuracy(accuracy.capacity_accuracy_pct),
+            unit="%",
+        ),
+        risk_quadrant=classify_delivery_risk_quadrant(accuracy.planning_accuracy_pct, accuracy.capacity_accuracy_pct),
+    )
