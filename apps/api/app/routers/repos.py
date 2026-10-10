@@ -1,13 +1,13 @@
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import record_audit_for_user
 from app.auth.dependencies import ensure_workspace_access, get_internal_user, get_repo_for_user
-from app.db.models import Repo, User
+from app.db.models import Repo, Service, User
 from app.db.session import get_db
 from app.queue.client import enqueue
 from app.schemas import RepoOut, RepoUpdate
@@ -48,12 +48,20 @@ async def update_repo(
 ) -> Repo:
     before = {"slack_channel_id": repo.slack_channel_id}
     updates = payload.model_dump(exclude_unset=True)
+    if "service_id" in updates and updates["service_id"] is not None:
+        service = await db.get(Service, updates["service_id"])
+        if service is None or service.workspace_id != repo.workspace_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
     for field, value in updates.items():
         setattr(repo, field, value)
     await db.flush()
+    # before_json/after_json are plain JSON columns — stringify UUID values
+    # (e.g. service_id) before handing them to record_audit_for_user, since
+    # Python's json module can't serialize a UUID directly.
+    audit_after = {k: (str(v) if isinstance(v, UUID) else v) for k, v in updates.items()}
     await record_audit_for_user(
         db, user=user, action="repo.updated", entity_type="repo", entity_id=str(repo.id),
-        repo_id=repo.id, before=before, after=updates,
+        repo_id=repo.id, before=before, after=audit_after,
     )
     await db.commit()
     await db.refresh(repo)

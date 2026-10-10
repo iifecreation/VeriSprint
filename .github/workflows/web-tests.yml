@@ -1,0 +1,46 @@
+name: Web tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - ".github/workflows/web-tests.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - ".github/workflows/web-tests.yml"
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      # --legacy-peer-deps: vitest's peer range on @types/node conflicts
+      # with @testing-library/jest-dom's own optional peer on vitest — both
+      # resolve to compatible versions in practice (see package-lock.json),
+      # npm's strict resolver just won't say so on its own. Same flag used
+      # locally; not a workaround specific to CI.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build

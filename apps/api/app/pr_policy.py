@@ -14,18 +14,27 @@ whenever LLM analysis happens to finish (or not at all, if the LLM isn't
 configured — see README's "Private/On-Prem LLM" section).
 """
 from dataclasses import dataclass, field
+from pathlib import PurePosixPath
 
 # Checked against the lowercased file path — a substring match, not a glob,
 # same lightweight-heuristic discipline as app/capitalization.py's keyword
 # classifier and app/routers/allocation.py's investment categories.
 _TEST_PATH_HINTS = ("test", "spec", "__tests__", "__mocks__")
-_SAFE_PATH_PATTERNS = (
-    ".md", "docs/", "license", ".gitignore", "changelog",
-    ".github/issue_template", ".github/pull_request_template",
-)
 _SENSITIVE_PATH_HINTS = (
     "auth", "security", "secret", "credential", "password", "token", "payment",
     "billing", "stripe", "permission", "rbac", "crypto", "encrypt",
+)
+
+# _is_safe_path below matches these structurally (exact suffix, exact path
+# segment, or exact basename) rather than as raw substrings — a raw substring
+# match would let a real code file like "mydocs/payload.py" (contains
+# "docs/") or "exploit.md.sh" (contains ".md") pass as a "safe", auto-
+# approvable non-functional change.
+_SAFE_SUFFIXES = (".md", ".gitignore")
+_SAFE_PATH_SEGMENTS = ("docs",)
+_SAFE_BASENAME_PATTERNS = ("license", "changelog")
+_SAFE_EXACT_PATHS = (
+    ".github/issue_template.md", ".github/pull_request_template.md",
 )
 
 # Same "needs_focus" cutoff the Git Efficiency Metrics panel uses for PR Size
@@ -42,8 +51,24 @@ def _is_test_file(path: str) -> bool:
 
 
 def _is_safe_path(path: str) -> bool:
-    lower = path.lower()
-    return any(pattern in lower for pattern in _SAFE_PATH_PATTERNS)
+    lower = PurePosixPath(path.lower())
+    if lower.suffix in _SAFE_SUFFIXES or lower.name == ".gitignore":
+        return True
+    if any(part in _SAFE_PATH_SEGMENTS for part in lower.parts):
+        return True
+    if lower.stem in _SAFE_BASENAME_PATTERNS:
+        return True
+    as_posix = lower.as_posix()
+    if as_posix in _SAFE_EXACT_PATHS:
+        return True
+    # GitHub also allows a directory of templates, e.g.
+    # .github/ISSUE_TEMPLATE/bug_report.md — already covered by the ".md"
+    # suffix check above, but a non-.md file directly under one of these
+    # directories (e.g. a YAML template) is still safe.
+    return any(
+        as_posix == f"{prefix}" or as_posix.startswith(f"{prefix}/")
+        for prefix in (".github/issue_template", ".github/pull_request_template")
+    )
 
 
 def _is_sensitive_path(path: str) -> bool:

@@ -43,3 +43,15 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# One event loop for the whole test session — both fixtures AND test bodies
+# (pytest-asyncio scopes these separately; both need to match). The DB
+# sessions here bind to app.db.session's module-level pooled engine, whose
+# connections bind to whichever loop first used them — a per-test loop
+# (pytest-asyncio's default for test bodies) breaks every test after the
+# first with "attached to a different loop".
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]

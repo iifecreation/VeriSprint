@@ -450,11 +450,55 @@ curl, set it into the app's own `localStorage` keys from the browser console
 `verisprint_admin_access_token`/`verisprint_admin_refresh_token` for
 `apps/admin`) and reload.
 
-**There is no automated test suite yet.** `apps/api/tests/` exists (pytest +
-pytest-asyncio are dev dependencies) but is currently empty, and none of the
-three frontend apps have a test runner configured (`package.json` has no
-`test` script). Every feature in this codebase has instead been verified by
-hand against the real running stack above — curl/live DB queries for the
-API, and real clicks against the dev server for the UI — not by an
-automated suite. If you want repeatable local tests, this is the environment
-to write them against; there's no existing `npm test`/`pytest` to reach for yet.
+**`apps/api/tests/` now has a real automated suite** (52 tests, all passing)
+covering every Phase 2/3 competitor-parity module that's pure enough to unit
+test or DB-backed enough to need one: `compute_efficiency_metrics` (PR size,
+cycle time breakdown, rework/refactor, CFR/MTTR, person/team filtering),
+`compute_investment_profile` (category classification, keyword priority
+order), `compute_delivery_accuracy` + `classify_delivery_risk_quadrant` (all
+four risk postures), `compute_progress_pct`/`is_goal_breaching` (every
+direction — higher/lower/target-seeking — and the halfway-mark breach rule),
+`classify_pull_request` (PR policy labeling/auto-approve rules),
+`get_repo_ids_for_scope` (Team/Service segmentation), and the Report
+Builder's four Phase 6 sections. Run it with:
+
+```bash
+cd apps/api && source .venv/bin/activate && pytest
+```
+
+It needs the real dev Postgres running and migrated (`docker-compose up -d`
++ `alembic upgrade head`) — same prerequisite as running the app itself, not
+a separate test database; `tests/conftest.py` explains why (a transaction-
+rollback fixture was tried first and proved flaky with this driver stack,
+so isolation is explicit FK-ordered cleanup instead, verified stable across
+repeated runs with zero leftover rows). What it deliberately does *not*
+cover: worker entrypoints that open their own DB session rather than
+accepting one as a parameter (`apply_pr_policy`, `check_goal_breaches`) —
+testing those directly would commit to the real dev database outside the
+suite's cleanup; their underlying logic is covered through the pure
+functions they call instead.
+
+`apps/web` now has a real test runner too — Vitest + React Testing Library,
+set up per this Next.js version's own documented guide
+(`node_modules/next/dist/docs/01-app/02-guides/testing/vitest.md`), covering
+`lib/auth.ts`'s real logic (JWT claim decoding, the refresh-token
+de-duplication lock, clearing tokens on a failed refresh) and a handful of
+shared UI components (`Badge`'s per-tone styling, `StatCard`'s optional
+hint, `PageHeader`). Run it with `cd apps/web && npm test`. `apps/admin` and
+`apps/marketing` still have no test runner configured — both are smaller
+surfaces with comparatively little logic of their own (operator CRUD
+screens and static marketing pages, respectively); UI verification there is
+still by hand against the dev server.
+
+**CI**: `.github/workflows/api-tests.yml` and `.github/workflows/web-tests.yml`
+run on every push to `main` and every PR, path-scoped to their own app so a
+frontend-only change doesn't spin up Postgres for nothing (and vice versa).
+`api-tests.yml` runs real Postgres + Redis service containers (same image +
+credentials as `docker-compose.yml`), migrates, then runs `pytest`.
+`web-tests.yml` runs `tsc --noEmit`, `npm test`, and `npm run build` —
+catching the class of break the Vitest suite alone wouldn't (a type error or
+build failure in one of the many page components Vitest doesn't cover,
+which is most of them; this app's actual business logic lives in `apps/api`
+by design, see the Stack section above). Neither workflow exists yet for
+`apps/admin`/`apps/marketing`, consistent with neither having a local test
+runner configured either.

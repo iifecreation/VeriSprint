@@ -130,7 +130,9 @@ async def get_repo_ids_for_scope(
     if service is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
     ensure_workspace_access(user, service.workspace_id)
-    result = await db.execute(select(Repo.id).where(Repo.service_id == service.id))
+    result = await db.execute(
+        select(Repo.id).where(Repo.service_id == service.id, Repo.workspace_id == service.workspace_id)
+    )
     return [r for (r,) in result.all()]
 
 

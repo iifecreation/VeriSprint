@@ -22,7 +22,9 @@ router = APIRouter(prefix="/services", tags=["services"], dependencies=[Depends(
 
 
 async def _service_out(db: AsyncSession, service: Service) -> ServiceOut:
-    result = await db.execute(select(Repo.id).where(Repo.service_id == service.id))
+    result = await db.execute(
+        select(Repo.id).where(Repo.service_id == service.id, Repo.workspace_id == service.workspace_id)
+    )
     return ServiceOut(
         id=service.id, workspace_id=service.workspace_id, name=service.name, created_at=service.created_at,
         repo_ids=[r for (r,) in result.all()],
@@ -71,7 +73,9 @@ async def delete_service(
 ) -> dict:
     # Member repos aren't deleted — just ungrouped, same as unsetting
     # slack_channel_id would never delete the repo.
-    repos_result = await db.execute(select(Repo).where(Repo.service_id == service.id))
+    repos_result = await db.execute(
+        select(Repo).where(Repo.service_id == service.id, Repo.workspace_id == service.workspace_id)
+    )
     for repo in repos_result.scalars().all():
         repo.service_id = None
     await record_audit_for_user(
