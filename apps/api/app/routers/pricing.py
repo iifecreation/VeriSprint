@@ -13,9 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit import record_audit_for_user
-from app.auth.dependencies import require_role
-from app.db.models import PricingPlan, User, UserRole, WorkspacePlanTier
+from app.audit import record_audit
+from app.auth.dependencies import get_current_admin
+from app.db.models import AdminAccount, PricingPlan, WorkspacePlanTier
 from app.db.session import get_db
 from app.integrations import paystack_client, stripe_client
 from app.integrations.paystack_client import PaystackError, PaystackNotConfigured
@@ -60,7 +60,7 @@ async def list_pricing_plans(db: AsyncSession = Depends(get_db)) -> list[Pricing
 async def set_pricing_plan(
     tier: str,
     payload: PricingPlanUpdate,
-    admin: User = Depends(require_role(UserRole.SUPER_ADMIN)),
+    admin: AdminAccount = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ) -> PricingPlanOut:
     try:
@@ -114,10 +114,12 @@ async def set_pricing_plan(
         except PaystackError as exc:
             logger.warning("Paystack plan sync failed for %s: %s", plan_tier.value, exc)
 
-    plan.updated_by_user_id = admin.id
+    # Not plan.updated_by_user_id = admin.id — that FK targets users.id, and
+    # AdminAccount is a deliberately separate table (see its docstring).
+    # The audit entry's `actor` string below is the traceable record instead.
     await db.flush()
-    await record_audit_for_user(
-        db, user=admin, action="pricing_plan.updated", entity_type="pricing_plan", entity_id=str(plan.id),
+    await record_audit(
+        db, actor=admin.email, action="pricing_plan.updated", entity_type="pricing_plan", entity_id=str(plan.id),
         before=before, after={"price_usd": plan.price_usd, "billing_interval": plan.billing_interval, "name": plan.name},
     )
     await db.commit()

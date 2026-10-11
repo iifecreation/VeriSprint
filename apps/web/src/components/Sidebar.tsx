@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { decodeAccessTokenClaims, isLoggedIn, logout } from "@/lib/auth";
-import { ADMIN_APP_URL } from "@/lib/config";
 
 type NavLink = { href: string; label: string; roles?: string[] };
 type NavGroup = { label: string; links: NavLink[] };
@@ -121,24 +120,13 @@ export function Sidebar() {
     });
   }, [pathname]);
 
-  const isSuperAdmin = role === "super_admin";
   const visibleGroups = GROUPS.map((group) => ({
     ...group,
-    links: group.links.filter((link) => !link.roles || isSuperAdmin || link.roles.includes(role ?? "")),
+    links: group.links.filter((link) => !link.roles || link.roles.includes(role ?? "")),
   })).filter((group) => group.links.length > 0);
 
   const footer = (onNavigate?: () => void) => (
     <div className="shrink-0 border-t border-[var(--line)] p-3">
-      {isSuperAdmin && (
-        // External link, not an in-app route — the operator console is
-        // its own separate deploy (apps/admin), not a page in this app.
-        <a
-          href={ADMIN_APP_URL}
-          className="mb-2 flex items-center justify-center gap-1 rounded-lg border border-[var(--line-strong)] px-3 py-2 text-xs font-semibold text-[var(--text-muted)] transition-colors hover:bg-[var(--background)]"
-        >
-          Operator Console ↗
-        </a>
-      )}
       {loggedIn ? (
         <button
           onClick={async () => {

@@ -7,42 +7,11 @@ import { HeroBackground } from "@/components/HeroBackground";
 import { ShimmerButton } from "@/components/magicui/shimmer-button";
 import { Reveal, RevealGroup, RevealItem } from "@/components/Reveal";
 import { cardAccent } from "@/lib/palette";
-import {
-  ShieldCheck,
-  Radar,
-  History,
-  Sparkles,
-  Activity,
-  Target,
-  BarChart3,
-  Landmark,
-  TrendingUp,
-  Waypoints,
-  GitPullRequestArrow,
-  BellRing,
-  RadarIcon,
-  MessagesSquare,
-  ClipboardList,
-  Mail,
-  FileClock,
-  PieChart,
-  FileText,
-  ChartNoAxesGantt,
-  Link2,
-  HeartHandshake,
-  ScrollText,
-  KeyRound,
-  FileCheck2,
-  Cable,
-  ServerCog,
-  Plug,
-  Wallet,
-  FileSliders,
-} from "lucide-react";
+import { PRODUCTS } from "@/lib/products";
 
 export const metadata: Metadata = {
   title: "Features — VeriSprint",
-  description: "Six product areas, thirty-three features, every one traced back to a real commit — Evidence Ledger, Team Intelligence, Risk & Automation, Reporting, Team Health, and Enterprise.",
+  description: "Six product areas, thirty-eight features, every one traced back to a real commit — Evidence Ledger, Team Intelligence, Risk & Automation, Reporting, Team Health, and Enterprise.",
 };
 
 const SPOTLIGHT = [
@@ -77,101 +46,6 @@ const SPOTLIGHT = [
     mock: { label: "Client Portal", lines: ["client: Acme Co", "period: Aug 1 – Aug 14", "delivered: 3 features,", "  2 bug fixes, verified"] },
   },
 ] as const;
-
-type ProductFeature = { icon: typeof ShieldCheck; title: string; body: string };
-type Product = {
-  eyebrow: string;
-  name: string;
-  pitch: string;
-  stat: { value: string; label: string };
-  features: ProductFeature[];
-};
-
-// Framed as products, not a flat feature list — each one is a real reason
-// a specific kind of buyer would connect a repo, not just a bucket for
-// features that happened to share a theme.
-const PRODUCTS: Product[] = [
-  {
-    eyebrow: "Product 1 of 6",
-    name: "The Verification Engine",
-    pitch: "The core judgment layer every other product here is built on top of — turns raw commits into a defensible, evidence-backed account of what's actually done.",
-    stat: { value: "0–100", label: "Confidence Score, always with its rationale" },
-    features: [
-      { icon: ShieldCheck, title: "Evidence Ledger", body: "Every commit and PR analyzed for tests added, TODOs, dead code, and call-graph context — a structured, inspectable evidence item, not a summary." },
-      { icon: Target, title: "Confidence Score", body: "A 0–100 score per ticket, computed from its real Evidence Ledger, with the rationale always visible next to the number." },
-      { icon: Activity, title: "Code Health Signals", body: "A transparent health score built from real signal — tests added weighed against missing tests, dead code, and open TODOs — feeding directly into the Confidence Score. Our honest answer to \"durable change\" scoring: we don't claim to track line-survival across history, because we don't have that data to back it." },
-      { icon: History, title: "Historical Accuracy", body: "Per person, per month: how often claimed progress actually held up against verified evidence, tracked over time." },
-    ],
-  },
-  {
-    eyebrow: "Product 2 of 6",
-    name: "Team Intelligence",
-    pitch: "The competitor-parity layer — the same DORA, allocation, and forecasting metrics Jellyfish/LinearB/Allstacks sell, computed here from the same real evidence instead of a second, separate data pipeline.",
-    stat: { value: "4", label: "Standard DORA metrics, benchmarked against your own history" },
-    features: [
-      { icon: BarChart3, title: "DORA Metrics Panel", body: "Deployment frequency, lead time for changes, and the rest of the standard four DORA metrics, benchmarked against your own team's history." },
-      { icon: Sparkles, title: "AI Contribution Tracker", body: "Detects self-disclosed AI assistance in commit messages (Co-Authored-By trailers, 'Generated with' lines) — real disclosure, not a behavioral guess." },
-      { icon: Landmark, title: "Investment Allocation", body: "Commits and tickets tagged and rolled up by business initiative, so leadership can see where engineering time actually went." },
-      { icon: FileCheck2, title: "Cost Capitalization Report", body: "Audit-ready R&D spend, classified by real title/description keywords and commit volume — dollar figures stay hidden until you configure a rate." },
-      { icon: Wallet, title: "AI Tool Cost Tracking", body: "Log what you actually pay for Copilot, Cursor, Claude Code, and every other AI coding tool seat — normalized to a monthly figure and set next to the AI Contribution Tracker's real adoption signal, never a vendor comparison." },
-      { icon: TrendingUp, title: "Delivery Forecast", body: "A statistical projection of a sprint's completion date from its own confidence-weighted velocity — a transparent trend line, not an opaque black-box model." },
-      { icon: Waypoints, title: "Value Stream View", body: "Average time spent in each ticket status before moving to the next, computed only from real, tracked status transitions." },
-    ],
-  },
-  {
-    eyebrow: "Product 3 of 6",
-    name: "Risk & Automation",
-    pitch: "Catches the invisible failure modes no status meeting surfaces — quietly-grown scope, unlinked work, stalled reviews — before they show up as a missed deadline.",
-    stat: { value: "3", label: "Detectors watching every push: drift, orphan work, stalled PRs" },
-    features: [
-      { icon: GitPullRequestArrow, title: "Ticket Drift Detector", body: "Catches when a ticket's real scope has silently grown in the code, without a corresponding re-estimation or ticket update." },
-      { icon: Link2, title: "Orphan Commit Detector", body: "Surfaces real work that was done but never linked to a ticket, and offers a one-click retroactive link so the effort gets credited." },
-      { icon: RadarIcon, title: "Risk Radar", body: "A proactive alert feed extending the drift and orphan detectors into an early warning system for slipping deadlines." },
-      { icon: BellRing, title: "Blocker Nudge Bot", body: "Slack alerts when a PR or review has stalled, so stuck work gets unstuck before it becomes a missed sprint." },
-      { icon: Radar, title: "Anomaly Check-In Nudges", body: "Detects unusual drops in a person's commit activity and gently suggests a check-in — framed around wellbeing, never performance." },
-      { icon: GitPullRequestArrow, title: "PR AutoRoute", body: "Suggests reviewers based on who actually has recent commit history in the same files — not a guess at expertise." },
-    ],
-  },
-  {
-    eyebrow: "Product 4 of 6",
-    name: "Communication & Reporting",
-    pitch: "The same verification engine, translated for every audience that needs to hear it: developers who'd rather not retype their day, PMs who need a sprint rollup, investors who need one paragraph.",
-    stat: { value: "7", label: "Report and digest types generated from one evidence source" },
-    features: [
-      { icon: MessagesSquare, title: "AI Repo Chat", body: "Ask your codebase questions in Slack or the dashboard, answered with citations back to the real evidence." },
-      { icon: Plug, title: "MCP Server", body: "Connect Claude Desktop, Cursor, or any MCP-compatible client directly to your Evidence Ledger — query tickets, Confidence Scores, and Repo Chat from the AI tool you already work in, authenticated with a rotatable per-workspace token." },
-      { icon: FileSliders, title: "Report Builder", body: "Pick exactly which real sections go into a report — shipped activity, cost capitalization, AI contribution, AI tool spend — deterministically assembled from the same evidence as every other report, no LLM rewrite step." },
-      { icon: ClipboardList, title: "Auto-Drafted Standups", body: "A daily summary drafted from real commits for a developer to review and post — no typing from memory required." },
-      { icon: Mail, title: "Slack & Email Digests", body: "A daily or weekly rollup delivered where the team already works, sourced from the same Evidence Ledger as everything else." },
-      { icon: FileClock, title: "Visual Changelog", body: "Merged PRs and commits grouped by day into a real activity timeline — not a hand-curated release-notes page." },
-      { icon: PieChart, title: "Investor Update Generator", body: "Auto-drafts the 'what we built' section of a monthly investor update, sourced from verified commit history, not memory." },
-      { icon: FileText, title: "Onboarding Doc Generator", body: "Turns a codebase's real structure and recent history into living onboarding docs for new hires." },
-      { icon: ChartNoAxesGantt, title: "Confidence-Weighted Burndown", body: "A sprint burndown built from real Confidence Score history, not self-reported percentages." },
-    ],
-  },
-  {
-    eyebrow: "Product 5 of 6",
-    name: "Team Health",
-    pitch: "The Swarmia-parity layer — developer experience signals correlated with real delivery data, and team norms that track themselves instead of living in a wiki nobody reads.",
-    stat: { value: "100%", label: "Anonymous — no survey response is ever traceable to a person" },
-    features: [
-      { icon: HeartHandshake, title: "Pulse Surveys", body: "Short, genuinely anonymous developer-experience check-ins — no response is ever traceable back to a person, even in the audit log." },
-      { icon: ScrollText, title: "Working Agreements", body: "Team-authored norms — PR size limits, review SLAs — written by the team, tracked automatically, never generated on their behalf." },
-    ],
-  },
-  {
-    eyebrow: "Product 6 of 6",
-    name: "Enterprise & Compliance",
-    pitch: "What a security review or a regulated-industry customer actually asks for — SSO, an audit trail, and the option to keep every byte of code on infrastructure you control.",
-    stat: { value: "0", label: "Bytes of your code used to train any third-party model" },
-    features: [
-      { icon: KeyRound, title: "SSO / SCIM", body: "Enterprise single sign-on plus SCIM user provisioning for identity providers like Okta and Azure AD." },
-      { icon: FileCheck2, title: "Compliance & Audit Trail", body: "An exportable, timestamped record tying every privileged action to its actor — for regulated industries that need to prove process." },
-      { icon: Cable, title: "Open Integration Framework", body: "A consistent connect/disconnect/status lifecycle for integrations beyond GitHub and Slack — Linear, Jira, PagerDuty, Datadog, Opsgenie." },
-      { icon: ServerCog, title: "Private / On-Prem LLM", body: "Point analysis at a self-hosted, OpenAI-compatible model instead of a third-party API — the same pipeline, on infrastructure you control." },
-    ],
-  },
-];
 
 export default function FeaturesPage() {
   return (
@@ -249,6 +123,14 @@ export default function FeaturesPage() {
                   <p className="text-xs font-bold uppercase tracking-wider font-mono text-brand mb-3">{product.eyebrow}</p>
                   <h3 className="text-3xl font-bold text-[var(--foreground)] tracking-tight sm:text-4xl">{product.name}</h3>
                   <p className="mt-4 max-w-2xl text-base leading-relaxed text-[var(--text-muted)]">{product.pitch}</p>
+                  <div className="mt-4">
+                    <Link
+                      href={`/platform/${product.slug}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-brand hover:underline"
+                    >
+                      Explore {product.name} in depth →
+                    </Link>
+                  </div>
                 </div>
                 <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-sm lg:justify-self-end lg:w-full lg:max-w-xs">
                   <p className="text-4xl font-bold text-[var(--foreground)]">{product.stat.value}</p>

@@ -8,7 +8,9 @@ import {
   type DORAMetrics,
   type EfficiencyReport,
   type InvestmentProfileReport,
+  type MetricsScope,
   type RiskRadar,
+  type Service,
   type Team,
   type TeamGoal,
 } from "@/lib/api";
@@ -50,6 +52,8 @@ function daysAgoISO(days: number) {
  */
 export default function InsightsPage() {
   const [repoId, setRepoId] = useState<string | null>(null);
+  const [serviceId, setServiceId] = useState<string | null>(null);
+  const [services, setServices] = useState<Service[]>([]);
   const [start, setStart] = useState(daysAgoISO(30));
   const [end, setEnd] = useState(todayISO());
   const [flags, setFlags] = useState<Record<string, boolean> | null>(null);
@@ -57,14 +61,40 @@ export default function InsightsPage() {
 
   useEffect(() => {
     api.resolvedFeatureFlags(FLAG_KEYS).then((r) => setFlags(r.flags));
+    api.listServices().then(setServices).catch(() => setServices([]));
   }, []);
+
+  // Git Efficiency Metrics and Investment Profile can be scoped by a whole
+  // Service's member repos instead of one repo (Phase 7 segmentation) — the
+  // other panels below only ever take a single repo_id, so they keep using
+  // repoId regardless of a Service selection.
+  const metricsScope: MetricsScope | null = serviceId ? { serviceId } : repoId ? { repoId } : null;
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">
       <PageHeader
         title="Insights"
         subtitle="DORA metrics, code health, risk radar, and team goals — the competitor-parity feature set."
-        actions={<RepoPicker selectedRepoId={repoId} onChange={setRepoId} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <RepoPicker selectedRepoId={repoId} onChange={setRepoId} />
+            {services.length > 0 && (
+              <select
+                value={serviceId ?? ""}
+                onChange={(e) => setServiceId(e.target.value || null)}
+                title="Scope Git Efficiency Metrics and Investment Profile by a Service instead of the repo above"
+                className="rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--foreground)] focus:border-[var(--accent-neon-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-neon)]/30"
+              >
+                <option value="">Service scope: off (use repo above)</option>
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    Service: {s.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        }
       />
 
       <div className="mt-6 flex gap-3">
@@ -80,10 +110,10 @@ export default function InsightsPage() {
             {repoId && flags.dora_panel && <DoraPanel repoId={repoId} start={start} end={end} />}
           </Panel>
           <Panel title="Git Efficiency Metrics" enabled={flags.git_efficiency_metrics}>
-            {repoId && flags.git_efficiency_metrics && <EfficiencyPanel repoId={repoId} start={start} end={end} />}
+            {metricsScope && flags.git_efficiency_metrics && <EfficiencyPanel scope={metricsScope} start={start} end={end} />}
           </Panel>
           <Panel title="Investment Profile" enabled={flags.investment_profile}>
-            {repoId && flags.investment_profile && <InvestmentProfilePanel repoId={repoId} start={start} end={end} />}
+            {metricsScope && flags.investment_profile && <InvestmentProfilePanel scope={metricsScope} start={start} end={end} />}
           </Panel>
           <Panel title="Code Health" enabled={flags.code_health_signals}>
             {repoId && flags.code_health_signals && <CodeHealthPanel repoId={repoId} start={start} end={end} />}
@@ -160,7 +190,7 @@ function BenchmarkStat({ label, stat }: { label: string; stat: BenchmarkedValue 
   );
 }
 
-function EfficiencyPanel({ repoId, start, end }: { repoId: string; start: string; end: string }) {
+function EfficiencyPanel({ scope, start, end }: { scope: MetricsScope; start: string; end: string }) {
   const [data, setData] = useState<EfficiencyReport | null>(null);
   const [person, setPerson] = useState("");
   const [teamId, setTeamId] = useState("");
@@ -173,10 +203,11 @@ function EfficiencyPanel({ repoId, start, end }: { repoId: string; start: string
   useEffect(() => {
     const trimmed = person.trim();
     api
-      .getEfficiency(repoId, `${start}T00:00:00Z`, `${end}T23:59:59Z`, trimmed || null, teamId || null)
+      .getEfficiency(scope, `${start}T00:00:00Z`, `${end}T23:59:59Z`, trimmed || null, teamId || null)
       .then(setData)
       .catch(() => setData(null));
-  }, [repoId, start, end, person, teamId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(scope), start, end, person, teamId]);
 
   return (
     <div>
@@ -255,11 +286,12 @@ function InvestmentCategoryBar({ label, pct, targetPct }: { label: string; pct: 
   );
 }
 
-function InvestmentProfilePanel({ repoId, start, end }: { repoId: string; start: string; end: string }) {
+function InvestmentProfilePanel({ scope, start, end }: { scope: MetricsScope; start: string; end: string }) {
   const [data, setData] = useState<InvestmentProfileReport | null>(null);
   useEffect(() => {
-    api.getInvestmentProfile(repoId, `${start}T00:00:00Z`, `${end}T23:59:59Z`).then(setData).catch(() => setData(null));
-  }, [repoId, start, end]);
+    api.getInvestmentProfile(scope, `${start}T00:00:00Z`, `${end}T23:59:59Z`).then(setData).catch(() => setData(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(scope), start, end]);
   if (!data) return <p className="mt-2 text-xs text-[var(--text-dim)]">Loading…</p>;
   return (
     <div>

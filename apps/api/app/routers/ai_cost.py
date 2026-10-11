@@ -92,7 +92,7 @@ async def update_subscription(
     db: AsyncSession = Depends(get_db),
 ) -> AIToolSubscriptionOut:
     sub = await db.get(AIToolSubscription, subscription_id)
-    if sub is None or (admin.role != UserRole.SUPER_ADMIN and sub.workspace_id != admin.workspace_id):
+    if sub is None or sub.workspace_id != admin.workspace_id:
         raise HTTPException(status_code=404, detail="Subscription not found")
     updates = payload.model_dump(exclude_unset=True)
     started_on = updates.get("started_on", sub.started_on)
@@ -111,7 +111,7 @@ async def delete_subscription(
     subscription_id: UUID, admin: User = Depends(require_role(UserRole.WORKSPACE_ADMIN)), db: AsyncSession = Depends(get_db)
 ) -> dict:
     sub = await db.get(AIToolSubscription, subscription_id)
-    if sub is None or (admin.role != UserRole.SUPER_ADMIN and sub.workspace_id != admin.workspace_id):
+    if sub is None or sub.workspace_id != admin.workspace_id:
         raise HTTPException(status_code=404, detail="Subscription not found")
     await db.delete(sub)
     await db.commit()

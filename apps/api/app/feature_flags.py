@@ -8,7 +8,7 @@ matching rule all resolve to disabled, never "on by default."
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import FeatureFlag, User, UserRole, Workspace, WorkspacePlanTier
+from app.db.models import FeatureFlag, User, Workspace, WorkspacePlanTier
 
 # Ordered least -> most capable. A flag's `min_plan_tier` gate is satisfied by
 # this workspace's tier or anything after it in this list.
@@ -39,10 +39,9 @@ async def is_feature_enabled(db: AsyncSession, *, key: str, workspace: Workspace
 
 async def is_feature_enabled_for_user(db: AsyncSession, *, key: str, user: User) -> bool:
     """Convenience wrapper for the common case of gating a router by the
-    caller's own workspace. SUPER_ADMIN always passes — the operator role
-    needs to see every feature's UI/data regardless of any workspace's plan."""
-    if user.role == UserRole.SUPER_ADMIN:
-        return True
+    caller's own workspace. No SUPER_ADMIN bypass — the Operator Console
+    reads workspace data through the separate `/admin/*` API surface, not
+    through feature-flagged customer routes."""
     if user.workspace_id is None:
         return False
     workspace = await db.get(Workspace, user.workspace_id)

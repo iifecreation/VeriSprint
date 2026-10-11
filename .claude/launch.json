@@ -12,6 +12,18 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-c", "cd apps/web && npm run dev"],
       "port": 53000
+    },
+    {
+      "name": "admin",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd apps/admin && npm run dev -- --port 53200"],
+      "port": 53200
+    },
+    {
+      "name": "marketing",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd apps/marketing && npm run dev -- --port 53100"],
+      "port": 53100
     }
   ]
 }

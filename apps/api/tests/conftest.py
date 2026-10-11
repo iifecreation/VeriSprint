@@ -49,7 +49,7 @@ async def db() -> AsyncIterator[AsyncSession]:
 _CLEANUP_TABLES_BY_REPO = [
     "deployments", "audit_log_entries", "team_goals", "tickets", "commits", "pull_requests", "sprints",
 ]
-_CLEANUP_TABLES_BY_WORKSPACE = ["team_goals", "teams", "services", "audit_log_entries", "users"]
+_CLEANUP_TABLES_BY_WORKSPACE = ["team_goals", "teams", "services", "audit_log_entries", "subscriptions", "users"]
 # Tables one join away from repo_id — cleaned up before _CLEANUP_TABLES_BY_REPO
 # deletes their parent row.
 _CLEANUP_JOINED_DELETES = [

@@ -242,7 +242,7 @@ function ChangelogPanel({ repoId, start, end }: { repoId: string; start: string;
 
 function AIToolCostPanel({ repoId }: { repoId: string | null }) {
   const role = useAccessTokenClaims()?.role ?? null;
-  const isAdmin = role === "workspace_admin" || role === "super_admin";
+  const isAdmin = role === "workspace_admin";
   const [report, setReport] = useState<AIToolCostReport | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [toolName, setToolName] = useState("");

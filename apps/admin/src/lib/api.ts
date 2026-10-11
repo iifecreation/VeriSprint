@@ -1,16 +1,14 @@
 import { API_BASE_URL } from "./config";
 import { clearTokens, getAccessToken, getRefreshToken, refreshAccessToken } from "./auth";
 
-// --- Auth (spec Section 6) -----------------------------------------------------
+// --- Operator Console auth (app/routers/admin_auth.py) --------------------------
+// Deliberately NOT the customer-facing /auth/* surface — this hits
+// /admin/auth/*, backed by the separate AdminAccount table, not `users`.
 
-export type CurrentUser = {
+export type CurrentAdmin = {
   id: string;
-  email: string | null;
-  github_login: string | null;
+  email: string;
   name: string | null;
-  avatar_url: string | null;
-  role: string;
-  workspace_id: string | null;
   last_login_at: string | null;
 };
 
@@ -19,7 +17,7 @@ export type TokenPair = {
   refresh_token: string;
   token_type: string;
   expires_in: number;
-  user: CurrentUser;
+  admin: CurrentAdmin;
 };
 
 // --- Super-Admin Dashboard (spec Section 7) -------------------------------------
@@ -124,6 +122,31 @@ export type AdminFeatureFlag = {
   updated_at: string;
 };
 
+export type AdminRepo = {
+  id: string;
+  full_name: string;
+  default_branch: string;
+  is_active: boolean;
+  slack_channel_id: string | null;
+  service_id: string | null;
+};
+
+export type AdminSubscription = {
+  plan_tier: string;
+  status: string;
+  mrr: number;
+  renewed_at: string | null;
+  payment_provider: string | null;
+};
+
+export type ImpersonationToken = {
+  access_token: string;
+  expires_in: number;
+  target_user_id: string;
+  target_user_email: string | null;
+  target_user_role: string;
+};
+
 export type AuditLogEntry = {
   id: string;
   repo_id: string | null;
@@ -178,15 +201,24 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   login: (email: string, password: string) =>
-    apiFetchNoAuth<TokenPair>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
-  me: () => apiFetch<CurrentUser>("/auth/me"),
-  logout: () => apiFetch<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+    apiFetchNoAuth<TokenPair>("/admin/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  me: () => apiFetch<CurrentAdmin>("/admin/auth/me"),
+  logout: () => apiFetch<{ ok: boolean }>("/admin/auth/logout", { method: "POST" }),
 
   adminOverview: () => apiFetch<AdminOverview>("/admin/overview"),
   adminListWorkspaces: (search?: string) => apiFetch<AdminWorkspace[]>(`/admin/workspaces${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  adminGetWorkspace: (workspaceId: string) => apiFetch<AdminWorkspace>(`/admin/workspaces/${workspaceId}`),
   adminUpdateWorkspace: (workspaceId: string, payload: { status?: string; plan_tier?: string }) =>
     apiFetch<AdminWorkspace>(`/admin/workspaces/${workspaceId}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  adminListUsers: (search?: string) => apiFetch<AdminUser[]>(`/admin/users${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  adminWorkspaceRepos: (workspaceId: string) => apiFetch<AdminRepo[]>(`/admin/workspaces/${workspaceId}/repos`),
+  adminWorkspaceSubscription: (workspaceId: string) =>
+    apiFetch<AdminSubscription | null>(`/admin/workspaces/${workspaceId}/subscription`),
+  adminImpersonateWorkspace: (workspaceId: string) =>
+    apiFetch<ImpersonationToken>(`/admin/workspaces/${workspaceId}/impersonate`, { method: "POST" }),
+  adminListUsers: (search?: string, workspaceId?: string) =>
+    apiFetch<AdminUser[]>(
+      `/admin/users?${search ? `search=${encodeURIComponent(search)}&` : ""}${workspaceId ? `workspace_id=${workspaceId}` : ""}`
+    ),
   adminListErrors: (includeResolved = false) => apiFetch<AdminErrorEvent[]>(`/admin/errors?include_resolved=${includeResolved}`),
   adminResolveError: (errorId: string) => apiFetch<AdminErrorEvent>(`/admin/errors/${errorId}/resolve`, { method: "POST" }),
   adminListContactMessages: (includeResolved = false) =>
@@ -203,7 +235,8 @@ export const api = {
     apiFetch<AdminFeatureFlag>("/admin/flags", { method: "POST", body: JSON.stringify(payload) }),
   adminUpdateFlag: (flagId: string, payload: Partial<{ description: string; enabled_globally: boolean; min_plan_tier: string | null }>) =>
     apiFetch<AdminFeatureFlag>(`/admin/flags/${flagId}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  adminAuditLog: (limit = 100) => apiFetch<AuditLogEntry[]>(`/admin/audit?limit=${limit}`),
+  adminAuditLog: (limit = 100, workspaceId?: string) =>
+    apiFetch<AuditLogEntry[]>(`/admin/audit?limit=${limit}${workspaceId ? `&workspace_id=${workspaceId}` : ""}`),
 };
 
 export { API_BASE_URL };

@@ -2,9 +2,10 @@
 Super-Admin Dashboard (spec Section 7) — the internal operator surface: every
 workspace, every user, the platform error feed, system-health metrics,
 aggregate revenue, and feature-flag rollout control, all cross-tenant. Every
-endpoint here requires the SUPER_ADMIN role; `ensure_workspace_access`'s
-bypass for that role is exactly what makes cross-tenant reads/writes safe —
-there is no per-workspace scoping to apply here by design.
+endpoint here is gated by `get_current_admin` — an `AdminAccount`, a table and
+token type deliberately separate from the customer `users` table (see
+AdminAccount's docstring in app/db/models.py) — never by a customer `User`'s
+role, so there's no per-workspace scoping to apply here by design.
 """
 from datetime import datetime, timezone
 from uuid import UUID
@@ -13,15 +14,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit import record_audit_for_user
-from app.auth.dependencies import require_role
+from app.audit import record_audit
+from app.auth.dependencies import get_current_admin
+from app.auth.security import create_access_token
+from app.config import get_settings
 from app.db.models import (
+    AdminAccount,
     AuditLogEntry,
     ContactMessage,
     ErrorEvent,
     FeatureFlag,
     ReconciliationFlag,
     Repo,
+    Subscription,
     SystemMetric,
     User,
     UserRole,
@@ -32,6 +37,7 @@ from app.db.models import (
 from app.db.session import get_db
 from app.schemas import (
     AdminOverview,
+    AdminSubscriptionOut,
     AdminUserOut,
     AdminWorkspaceOut,
     AdminWorkspaceUpdate,
@@ -41,20 +47,22 @@ from app.schemas import (
     FeatureFlagCreate,
     FeatureFlagOut,
     FeatureFlagUpdate,
+    ImpersonationTokenOut,
+    RepoOut,
     RevenueSummary,
     SystemMetricOut,
 )
 
-router = APIRouter(prefix="/admin", tags=["super-admin"])
+settings = get_settings()
 
-_require_super_admin = require_role(UserRole.SUPER_ADMIN)
+router = APIRouter(prefix="/admin", tags=["super-admin"])
 
 
 # --- Panel 1: platform overview ----------------------------------------------
 
 @router.get("/overview", response_model=AdminOverview)
 async def get_overview(
-    admin: User = Depends(_require_super_admin), db: AsyncSession = Depends(get_db)
+    admin: AdminAccount = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
 ) -> AdminOverview:
     workspace_count = await db.scalar(select(func.count()).select_from(Workspace))
     active_workspace_count = await db.scalar(
@@ -89,7 +97,7 @@ async def list_workspaces(
     search: str | None = None,
     status_filter: str | None = None,
     limit: int = 100,
-    admin: User = Depends(_require_super_admin),
+    admin: AdminAccount = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ) -> list[AdminWorkspaceOut]:
     stmt = select(Workspace).order_by(Workspace.created_at.desc())
@@ -116,7 +124,7 @@ async def list_workspaces(
 
 @router.get("/workspaces/{workspace_id}", response_model=AdminWorkspaceOut)
 async def get_workspace(
-    workspace_id: UUID, admin: User = Depends(_require_super_admin), db: AsyncSession = Depends(get_db)
+    workspace_id: UUID, admin: AdminAccount = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
 ) -> AdminWorkspaceOut:
     ws = await db.get(Workspace, workspace_id)
     if ws is None:
@@ -134,7 +142,7 @@ async def get_workspace(
 async def update_workspace(
     workspace_id: UUID,
     payload: AdminWorkspaceUpdate,
-    admin: User = Depends(_require_super_admin),
+    admin: AdminAccount = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminWorkspaceOut:
     ws = await db.get(Workspace, workspace_id)
@@ -154,9 +162,9 @@ async def update_workspace(
             raise HTTPException(status_code=422, detail=f"Unknown plan_tier: {payload.plan_tier}") from exc
 
     await db.flush()
-    await record_audit_for_user(
-        db, user=admin, action="admin.workspace_updated", entity_type="workspace", entity_id=str(ws.id),
-        before=before, after={"status": ws.status.value, "plan_tier": ws.plan_tier.value},
+    await record_audit(
+        db, actor=admin.email, action="admin.workspace_updated", entity_type="workspace", entity_id=str(ws.id),
+        workspace_id=ws.id, before=before, after={"status": ws.status.value, "plan_tier": ws.plan_tier.value},
     )
     await db.commit()
 
@@ -169,14 +177,98 @@ async def update_workspace(
     )
 
 
+@router.get("/workspaces/{workspace_id}/repos", response_model=list[RepoOut])
+async def get_workspace_repos(
+    workspace_id: UUID, admin: AdminAccount = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
+) -> list[Repo]:
+    ws = await db.get(Workspace, workspace_id)
+    if ws is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    result = await db.execute(select(Repo).where(Repo.workspace_id == ws.id).order_by(Repo.full_name))
+    return list(result.scalars().all())
+
+
+@router.get("/workspaces/{workspace_id}/subscription", response_model=AdminSubscriptionOut | None)
+async def get_workspace_subscription(
+    workspace_id: UUID, admin: AdminAccount = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
+) -> AdminSubscriptionOut | None:
+    ws = await db.get(Workspace, workspace_id)
+    if ws is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    result = await db.execute(select(Subscription).where(Subscription.workspace_id == ws.id))
+    sub = result.scalar_one_or_none()
+    if sub is None:
+        return None
+    return AdminSubscriptionOut(
+        plan_tier=sub.plan_tier.value, status=sub.status.value, mrr=sub.mrr,
+        renewed_at=sub.renewed_at, payment_provider=sub.payment_provider,
+    )
+
+
+@router.post("/workspaces/{workspace_id}/impersonate", response_model=ImpersonationTokenOut)
+async def impersonate_workspace(
+    workspace_id: UUID, admin: AdminAccount = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
+) -> ImpersonationTokenOut:
+    """
+    "View as this workspace" (Operator Console): issues a normal, short-lived
+    access token for a *real* user in the target workspace — never a synthetic
+    identity — so every existing authorization path (ensure_workspace_access,
+    user.workspace_id defaults) behaves exactly as if that user signed in
+    themselves. No refresh token is issued: when the access token expires
+    (JWT_ACCESS_TTL_MINUTES, 15 min by default), the impersonated session
+    simply ends rather than silently renewing.
+
+    Picks the workspace's longest-tenured WORKSPACE_ADMIN as the one coherent
+    "what does this customer see" view; falls back to the longest-tenured
+    non-client user if the workspace has no admin yet (e.g. mid-onboarding).
+    """
+    ws = await db.get(Workspace, workspace_id)
+    if ws is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    target_result = await db.execute(
+        select(User)
+        .where(User.workspace_id == ws.id, User.role == UserRole.WORKSPACE_ADMIN)
+        .order_by(User.created_at)
+        .limit(1)
+    )
+    target = target_result.scalar_one_or_none()
+    if target is None:
+        fallback_result = await db.execute(
+            select(User)
+            .where(User.workspace_id == ws.id, User.role != UserRole.CLIENT)
+            .order_by(User.created_at)
+            .limit(1)
+        )
+        target = fallback_result.scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="This workspace has no user to view it as yet")
+
+    token = create_access_token(
+        user_id=target.id, workspace_id=target.workspace_id, role=target.role.value,
+        token_version=target.token_version, impersonated_by=admin.id,
+    )
+    await record_audit(
+        db, actor=admin.email, action="admin.impersonation_started", entity_type="workspace", entity_id=str(ws.id),
+        workspace_id=ws.id, after={"target_user_id": str(target.id), "target_email": target.email or target.github_login},
+    )
+    await db.commit()
+
+    return ImpersonationTokenOut(
+        access_token=token, expires_in=settings.jwt_access_ttl_minutes * 60,
+        target_user_id=target.id, target_user_email=target.email or target.github_login, target_user_role=target.role.value,
+    )
+
+
 # --- Panel 3: users (cross-tenant) -------------------------------------------
 
 @router.get("/users", response_model=list[AdminUserOut])
 async def list_all_users(
     search: str | None = None,
     role: str | None = None,
+    workspace_id: UUID | None = None,
     limit: int = 200,
-    admin: User = Depends(_require_super_admin),
+    admin: AdminAccount = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ) -> list[AdminUserOut]:
     stmt = select(User).order_by(User.created_at.desc())
@@ -184,6 +276,8 @@ async def list_all_users(
         stmt = stmt.where(User.email.ilike(f"%{search}%") | User.github_login.ilike(f"%{search}%"))
     if role:
         stmt = stmt.where(User.role == role)
+    if workspace_id:
+        stmt = stmt.where(User.workspace_id == workspace_id)
     result = await db.execute(stmt.limit(min(limit, 1000)))
     users = list(result.scalars().all())
 
@@ -211,7 +305,7 @@ async def list_errors(
     severity: str | None = None,
     include_resolved: bool = False,
     limit: int = 200,
-    admin: User = Depends(_require_super_admin),
+    admin: AdminAccount = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ) -> list[ErrorEvent]:
     stmt = select(ErrorEvent).order_by(ErrorEvent.created_at.desc())
@@ -227,15 +321,16 @@ async def list_errors(
 
 @router.post("/errors/{error_id}/resolve", response_model=ErrorEventOut)
 async def resolve_error(
-    error_id: UUID, admin: User = Depends(_require_super_admin), db: AsyncSession = Depends(get_db)
+    error_id: UUID, admin: AdminAccount = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
 ) -> ErrorEvent:
     error = await db.get(ErrorEvent, error_id)
     if error is None:
         raise HTTPException(status_code=404, detail="Error not found")
     error.resolved_at = datetime.now(timezone.utc)
     await db.flush()
-    await record_audit_for_user(
-        db, user=admin, action="admin.error_resolved", entity_type="error_event", entity_id=str(error.id),
+    await record_audit(
+        db, actor=admin.email, action="admin.error_resolved", entity_type="error_event", entity_id=str(error.id),
+        workspace_id=error.workspace_id,
     )
     await db.commit()
     await db.refresh(error)
@@ -248,7 +343,7 @@ async def resolve_error(
 async def list_contact_messages(
     include_resolved: bool = False,
     limit: int = 200,
-    admin: User = Depends(_require_super_admin),
+    admin: AdminAccount = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ) -> list[ContactMessage]:
     stmt = select(ContactMessage).order_by(ContactMessage.created_at.desc())
@@ -260,16 +355,18 @@ async def list_contact_messages(
 
 @router.post("/contact-messages/{message_id}/resolve", response_model=ContactMessageOut)
 async def resolve_contact_message(
-    message_id: UUID, admin: User = Depends(_require_super_admin), db: AsyncSession = Depends(get_db)
+    message_id: UUID, admin: AdminAccount = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
 ) -> ContactMessage:
     message = await db.get(ContactMessage, message_id)
     if message is None:
         raise HTTPException(status_code=404, detail="Message not found")
     message.resolved_at = datetime.now(timezone.utc)
-    message.resolved_by_user_id = admin.id
+    # Not resolved_by_user_id = admin.id — that FK targets users.id, and
+    # AdminAccount is a deliberately separate table (see its docstring). The
+    # audit entry's `actor` string below is the traceable record instead.
     await db.flush()
-    await record_audit_for_user(
-        db, user=admin, action="admin.contact_message_resolved", entity_type="contact_message", entity_id=str(message.id),
+    await record_audit(
+        db, actor=admin.email, action="admin.contact_message_resolved", entity_type="contact_message", entity_id=str(message.id),
     )
     await db.commit()
     await db.refresh(message)
@@ -283,7 +380,7 @@ async def list_metrics(
     metric_name: str | None = None,
     since: datetime | None = None,
     limit: int = 500,
-    admin: User = Depends(_require_super_admin),
+    admin: AdminAccount = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ) -> list[SystemMetric]:
     stmt = select(SystemMetric).order_by(SystemMetric.recorded_at.desc())
@@ -299,7 +396,7 @@ async def list_metrics(
 
 @router.get("/revenue", response_model=RevenueSummary)
 async def get_revenue_summary(
-    admin: User = Depends(_require_super_admin), db: AsyncSession = Depends(get_db)
+    admin: AdminAccount = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
 ) -> RevenueSummary:
     result = await db.execute(select(Workspace.plan_tier, Workspace.status, Workspace.mrr))
     rows = result.all()
@@ -319,7 +416,7 @@ async def get_revenue_summary(
 
 @router.get("/flags", response_model=list[FeatureFlagOut])
 async def list_feature_flags(
-    admin: User = Depends(_require_super_admin), db: AsyncSession = Depends(get_db)
+    admin: AdminAccount = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
 ) -> list[FeatureFlag]:
     result = await db.execute(select(FeatureFlag).order_by(FeatureFlag.key))
     return list(result.scalars().all())
@@ -327,7 +424,7 @@ async def list_feature_flags(
 
 @router.post("/flags", response_model=FeatureFlagOut)
 async def create_feature_flag(
-    payload: FeatureFlagCreate, admin: User = Depends(_require_super_admin), db: AsyncSession = Depends(get_db)
+    payload: FeatureFlagCreate, admin: AdminAccount = Depends(get_current_admin), db: AsyncSession = Depends(get_db)
 ) -> FeatureFlag:
     existing = await db.execute(select(FeatureFlag).where(FeatureFlag.key == payload.key))
     if existing.scalar_one_or_none() is not None:
@@ -340,8 +437,8 @@ async def create_feature_flag(
     )
     db.add(flag)
     await db.flush()
-    await record_audit_for_user(
-        db, user=admin, action="admin.flag_created", entity_type="feature_flag", entity_id=str(flag.id),
+    await record_audit(
+        db, actor=admin.email, action="admin.flag_created", entity_type="feature_flag", entity_id=str(flag.id),
         after={"key": flag.key, "enabled_globally": flag.enabled_globally},
     )
     await db.commit()
@@ -353,7 +450,7 @@ async def create_feature_flag(
 async def update_feature_flag(
     flag_id: UUID,
     payload: FeatureFlagUpdate,
-    admin: User = Depends(_require_super_admin),
+    admin: AdminAccount = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ) -> FeatureFlag:
     flag = await db.get(FeatureFlag, flag_id)
@@ -370,8 +467,8 @@ async def update_feature_flag(
     for field, value in updates.items():
         setattr(flag, field, value)
     await db.flush()
-    await record_audit_for_user(
-        db, user=admin, action="admin.flag_updated", entity_type="feature_flag", entity_id=str(flag.id),
+    await record_audit(
+        db, actor=admin.email, action="admin.flag_updated", entity_type="feature_flag", entity_id=str(flag.id),
         before=before, after=payload.model_dump(exclude_unset=True),
     )
     await db.commit()
@@ -388,7 +485,7 @@ async def list_all_audit_entries(
     start: datetime | None = None,
     end: datetime | None = None,
     limit: int = 200,
-    admin: User = Depends(_require_super_admin),
+    admin: AdminAccount = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ) -> list[AuditLogEntry]:
     stmt = select(AuditLogEntry).order_by(AuditLogEntry.created_at.desc())

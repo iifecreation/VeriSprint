@@ -360,6 +360,16 @@ export type BenchmarkedValue = {
   unit: string;
 };
 
+/** Git Efficiency Metrics and Investment Profile (only — not DORA/Code
+ * Health/Risk, which the API only ever scopes by a single repo) can be
+ * scoped by a single Repo or by a whole Service's member repos — mirrors
+ * app/auth/dependencies.py's get_repo_ids_for_scope on the backend. */
+export type MetricsScope = { repoId: string } | { serviceId: string };
+
+function metricsScopeQuery(scope: MetricsScope): string {
+  return "repoId" in scope ? `repo_id=${scope.repoId}` : `service_id=${scope.serviceId}`;
+}
+
 export type EfficiencyReport = {
   period_start: string;
   period_end: string;
@@ -819,14 +829,14 @@ export const api = {
     apiFetch<{ portal_url: string }>("/billing/portal", { method: "POST", body: JSON.stringify({ return_url }) }),
   getDora: (repoId: string, periodStart: string, periodEnd: string) =>
     apiFetch<DORAMetrics>(`/dora?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
-  getEfficiency: (repoId: string, periodStart: string, periodEnd: string, person?: string | null, teamId?: string | null) =>
+  getEfficiency: (scope: MetricsScope, periodStart: string, periodEnd: string, person?: string | null, teamId?: string | null) =>
     apiFetch<EfficiencyReport>(
-      `/efficiency?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}` +
+      `/efficiency?${metricsScopeQuery(scope)}&period_start=${periodStart}&period_end=${periodEnd}` +
         (person ? `&person=${encodeURIComponent(person)}` : "") +
         (teamId ? `&team_id=${encodeURIComponent(teamId)}` : "")
     ),
-  getInvestmentProfile: (repoId: string, periodStart: string, periodEnd: string) =>
-    apiFetch<InvestmentProfileReport>(`/allocation/profile?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
+  getInvestmentProfile: (scope: MetricsScope, periodStart: string, periodEnd: string) =>
+    apiFetch<InvestmentProfileReport>(`/allocation/profile?${metricsScopeQuery(scope)}&period_start=${periodStart}&period_end=${periodEnd}`),
   getCodeHealth: (repoId: string, periodStart: string, periodEnd: string) =>
     apiFetch<CodeHealthSignals>(`/code-health?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
   getRiskRadar: (repoId: string) => apiFetch<RiskRadar>(`/risk?repo_id=${repoId}`),

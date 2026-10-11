@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, status
 
 from app.auth.dependencies import get_internal_user
-from app.db.models import User, UserRole, Workspace, WorkspacePlanTier
+from app.db.models import User, Workspace, WorkspacePlanTier
 from app.db.session import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,11 +52,10 @@ async def require_active_access(
 ) -> User:
     """Add as a router-level dependency — `APIRouter(..., dependencies=[Depends(require_active_access)])`
     — on any router that represents real product value a workspace could
-    otherwise use for free forever. SUPER_ADMIN always passes (the operator
-    role needs to reach every workspace's data regardless of that
-    workspace's own billing state)."""
-    if user.role == UserRole.SUPER_ADMIN:
-        return user
+    otherwise use for free forever. No SUPER_ADMIN bypass: the Operator
+    Console's cross-tenant reads go through the separate `/admin/*` API
+    surface (AdminAccount-authenticated), never through this customer path —
+    see AdminAccount's docstring in app/db/models.py."""
     if user.workspace_id is None:
         return user  # nothing to gate — every gated endpoint below this also 400s with no workspace anyway
 

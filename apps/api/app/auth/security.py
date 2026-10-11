@@ -24,7 +24,7 @@ from app.config import get_settings
 
 settings = get_settings()
 
-TokenType = Literal["access", "refresh"]
+TokenType = Literal["access", "refresh", "admin_access", "admin_refresh"]
 
 
 class TokenError(Exception):
@@ -56,7 +56,14 @@ def _encode(claims: dict[str, Any]) -> str:
     return jwt.encode(claims, settings.jwt_secret, algorithm="HS256")
 
 
-def create_access_token(*, user_id: uuid.UUID, workspace_id: uuid.UUID | None, role: str, token_version: int) -> str:
+def create_access_token(
+    *,
+    user_id: uuid.UUID,
+    workspace_id: uuid.UUID | None,
+    role: str,
+    token_version: int,
+    impersonated_by: uuid.UUID | None = None,
+) -> str:
     now = datetime.now(timezone.utc)
     claims = {
         "sub": str(user_id),
@@ -68,6 +75,13 @@ def create_access_token(*, user_id: uuid.UUID, workspace_id: uuid.UUID | None, r
         "iat": now,
         "exp": now + timedelta(minutes=settings.jwt_access_ttl_minutes),
     }
+    # Super-Admin "view as workspace" (Operator Console): the issued token's
+    # `sub` is the real target user, so every existing authorization path
+    # (ensure_workspace_access, user.workspace_id defaults) behaves exactly
+    # as if that user were signed in — this claim is purely a traceability
+    # marker, carried into every audit entry the impersonated session writes.
+    if impersonated_by is not None:
+        claims["impersonated_by"] = str(impersonated_by)
     return _encode(claims)
 
 
@@ -89,6 +103,50 @@ def create_token_pair(*, user_id: uuid.UUID, workspace_id: uuid.UUID | None, rol
     return {
         "access_token": create_access_token(user_id=user_id, workspace_id=workspace_id, role=role, token_version=token_version),
         "refresh_token": create_refresh_token(user_id=user_id, token_version=token_version),
+        "token_type": "bearer",
+        "expires_in": settings.jwt_access_ttl_minutes * 60,
+    }
+
+
+# --- Operator Console (apps/admin) tokens -------------------------------------
+# Distinct `type` claims ("admin_access"/"admin_refresh") rather than the
+# customer "access"/"refresh" — decode_token's expected_type check alone
+# means an admin token is never accepted by get_current_user (customer auth)
+# and a customer token is never accepted by get_current_admin, even though
+# both are signed with the same JWT_SECRET. See AdminAccount's docstring.
+
+
+def create_admin_access_token(*, admin_id: uuid.UUID, token_version: int) -> str:
+    now = datetime.now(timezone.utc)
+    claims = {
+        "sub": str(admin_id),
+        "tv": token_version,
+        "type": "admin_access",
+        "iss": settings.jwt_issuer,
+        "iat": now,
+        "exp": now + timedelta(minutes=settings.jwt_access_ttl_minutes),
+    }
+    return _encode(claims)
+
+
+def create_admin_refresh_token(*, admin_id: uuid.UUID, token_version: int) -> str:
+    now = datetime.now(timezone.utc)
+    claims = {
+        "sub": str(admin_id),
+        "tv": token_version,
+        "type": "admin_refresh",
+        "jti": str(uuid.uuid4()),
+        "iss": settings.jwt_issuer,
+        "iat": now,
+        "exp": now + timedelta(days=settings.jwt_refresh_ttl_days),
+    }
+    return _encode(claims)
+
+
+def create_admin_token_pair(*, admin_id: uuid.UUID, token_version: int) -> dict[str, Any]:
+    return {
+        "access_token": create_admin_access_token(admin_id=admin_id, token_version=token_version),
+        "refresh_token": create_admin_refresh_token(admin_id=admin_id, token_version=token_version),
         "token_type": "bearer",
         "expires_in": settings.jwt_access_ttl_minutes * 60,
     }

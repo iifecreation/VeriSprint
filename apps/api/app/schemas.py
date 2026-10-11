@@ -369,6 +369,42 @@ class AdminWorkspaceUpdate(BaseModel):
     plan_tier: str | None = None
 
 
+class AdminAccountOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    email: str
+    name: str | None
+    last_login_at: datetime | None
+    created_at: datetime
+
+
+class AdminTokenPair(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    admin: AdminAccountOut
+
+
+class AdminSubscriptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    plan_tier: str
+    status: str
+    mrr: float
+    renewed_at: datetime | None
+    payment_provider: str | None
+
+
+class ImpersonationTokenOut(BaseModel):
+    access_token: str
+    expires_in: int
+    target_user_id: uuid.UUID
+    target_user_email: str | None
+    target_user_role: str
+
+
 class AdminUserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -42,9 +42,16 @@ def _uuid_pk() -> Mapped[uuid.UUID]:
 
 
 class UserRole(str, enum.Enum):
-    """Spec Section 6 — five roles, least-privilege by default."""
+    """Spec Section 6 — customer-facing roles, least-privilege by default.
 
-    SUPER_ADMIN = "super_admin"  # internal only, never assigned to a customer — powers the Super-Admin Dashboard
+    SUPER_ADMIN is kept defined (never assignable, never checked by any
+    authorization path) purely so pre-migration `users` rows that still carry
+    it deserialize without error — operator/platform-admin access moved
+    entirely to the separate `AdminAccount` table + `/admin/auth/*` login,
+    decoupled from the customer `users` table on purpose (a breach of one
+    can't reach the other). See AdminAccount's docstring."""
+
+    SUPER_ADMIN = "super_admin"  # deprecated/historical only — see docstring above
     WORKSPACE_ADMIN = "workspace_admin"  # full control within their own workspace: billing, integrations, users
     MANAGER = "manager"  # full read access to dashboards/alerts/reports; cannot manage billing
     DEVELOPER = "developer"  # own Evidence Ledger + standup drafts; read-only team dashboard
@@ -83,6 +90,37 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     workspace: Mapped["Workspace | None"] = relationship(back_populates="users", foreign_keys=[workspace_id])
+
+
+class AdminAccount(Base):
+    """
+    Platform operator identity — the Operator Console's (`apps/admin`) own
+    login, deliberately a separate table and separate token type
+    (`app/auth/security.py`'s create_admin_access_token, `"admin_access"` /
+    `"admin_refresh"`) from the customer-facing `User`/`users` table. Nothing
+    cross-tenant (workspace status, billing, feature flags, impersonating a
+    workspace) is reachable with a regular user's token, and a regular
+    customer login is never reachable with an admin token, even though both
+    happen to be signed with the same JWT secret — the `type` claim alone
+    makes them mutually unusable against each other's endpoints.
+
+    Deliberately minimal: one flat permission level (every row here is a full
+    operator) rather than a role column — add one if/when a narrower
+    "support-only" tier is actually needed.
+    """
+
+    __tablename__ = "admin_accounts"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    name: Mapped[str | None] = mapped_column(String(255))
+    # Never null, unlike User.password_hash — admin accounts have no OAuth
+    # path, email/password is the only way in.
+    password_hash: Mapped[str] = mapped_column(String(255))
+    token_version: Mapped[int] = mapped_column(default=0)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    last_login_at: Mapped[datetime | None]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class WorkspacePlanTier(str, enum.Enum):

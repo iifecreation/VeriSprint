@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Repo } from "@/lib/api";
+import { api, API_BASE_URL, type Repo } from "@/lib/api";
 
 export function RepoPicker({
   selectedRepoId,
@@ -30,9 +30,12 @@ export function RepoPicker({
 
   if (repos.length === 0) {
     return (
-      <p className="text-sm text-[var(--text-dim)]">
-        No repos connected yet. Install the GitHub App to get started.
-      </p>
+      <a
+        href={`${API_BASE_URL}/github/install`}
+        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--background)]"
+      >
+        No repos connected yet — Install the GitHub App →
+      </a>
     );
   }
 

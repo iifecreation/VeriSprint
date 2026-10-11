@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { storeTokens } from "@/lib/auth";
-import { ADMIN_APP_URL } from "@/lib/config";
 import { Input, PrimaryButton } from "@/components/ui";
 
 /** Where an invite email's link lands (`{web_base_url}/accept-invite?token=...`
@@ -50,10 +49,6 @@ export default function AcceptInvitePage() {
     try {
       const pair = await api.acceptInvite(token, password);
       storeTokens(pair);
-      if (pair.user.role === "super_admin") {
-        window.location.href = ADMIN_APP_URL;
-        return;
-      }
       router.push("/dashboard");
     } catch {
       setError("This invite link is invalid or has expired — ask whoever invited you to send a new one.");

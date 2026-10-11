@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type DashboardSummary, type Ticket } from "@/lib/api";
+import { api, API_BASE_URL, type DashboardSummary, type Ticket } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
 import { TicketCard } from "@/components/TicketCard";
 import { Card, EmptyState, Input, LoadingState, PageHeader, PrimaryButton, SecondaryButton, StatCard } from "@/components/ui";
@@ -16,6 +16,7 @@ const STATUS_OPTIONS = ["todo", "in_progress", "in_review", "done"] as const;
  */
 export default function DashboardPage() {
   const [repoId, setRepoId] = useState<string | null>(null);
+  const [hasNoRepos, setHasNoRepos] = useState(false);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
@@ -25,6 +26,14 @@ export default function DashboardPage() {
   const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]>("todo");
   const [assignee, setAssignee] = useState("");
   const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    // First-run signal for the welcome card below — RepoPicker does its own
+    // identical fetch for the picker itself; this is a second, cheap,
+    // read-only call rather than threading a "repos are empty" callback
+    // through RepoPicker's props for every one of its other callers.
+    api.listRepos().then((repos) => setHasNoRepos(repos.length === 0)).catch(() => {});
+  }, []);
 
   async function refresh() {
     if (!repoId) return;
@@ -89,6 +98,25 @@ export default function DashboardPage() {
           <StaggerItem><StatCard label="Avg. confidence" value={summary.avg_confidence !== null ? `${summary.avg_confidence}/100` : "—"} /></StaggerItem>
           <StaggerItem><StatCard label="Open flags" value={summary.open_flags} accent={summary.open_flags > 0} /></StaggerItem>
         </StaggerGroup>
+      )}
+
+      {hasNoRepos && !repoId && (
+        <FadeIn>
+          <div className="mt-8">
+            <EmptyState
+              title="Welcome to VeriSprint"
+              body="Connect a GitHub repo to start seeing real evidence — commits, PRs, and tickets, backed by what actually shipped. Takes about a minute, no credit card needed."
+              action={
+                <a
+                  href={`${API_BASE_URL}/github/install`}
+                  className="inline-flex items-center justify-center rounded-full bg-[var(--accent-neon)] px-5 py-2.5 text-sm font-bold text-[#04201f] transition-all hover:bg-[var(--accent-neon-hover)] hover:scale-105 shadow-sm"
+                >
+                  Connect a GitHub repo →
+                </a>
+              }
+            />
+          </div>
+        </FadeIn>
       )}
 
       {repoId && (

@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import TokenError, decode_token
-from app.db.models import Repo, Service, User, UserRole, Workspace, WorkspaceStatus
+from app.db.models import AdminAccount, Repo, Service, User, UserRole, Workspace, WorkspaceStatus
 from app.db.session import get_db
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -58,11 +58,12 @@ async def get_current_user(
 
 def require_role(*allowed: UserRole):
     """Dependency factory: 403s unless the current user's role is one of `allowed`.
-    SUPER_ADMIN always passes, since it's the operator role that must reach
-    every workspace-scoped endpoint too."""
+    No SUPER_ADMIN bypass here — operator/cross-tenant access goes through
+    the separate `get_current_admin`/`AdminAccount` path (see its docstring),
+    never through a customer `User` row."""
 
     async def _check(user: User = Depends(get_current_user)) -> User:
-        if user.role == UserRole.SUPER_ADMIN or user.role in allowed:
+        if user.role in allowed:
             return user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -82,11 +83,10 @@ async def get_internal_user(user: User = Depends(get_current_user)) -> User:
 
 
 def ensure_workspace_access(user: User, workspace_id: UUID) -> None:
-    """Raise 403 unless `user` may act within `workspace_id`. SUPER_ADMIN bypasses
-    this (operator dashboard reaches across all workspaces); every other role
-    must have that exact workspace_id embedded on their own User row."""
-    if user.role == UserRole.SUPER_ADMIN:
-        return
+    """Raise 403 unless `user` may act within `workspace_id` — must have that
+    exact workspace_id embedded on their own User row. No SUPER_ADMIN bypass:
+    cross-tenant reads go through the separate `/admin/*` API surface
+    (AdminAccount-authenticated), never through this customer-facing path."""
     if user.workspace_id != workspace_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this workspace")
 
@@ -174,3 +174,35 @@ async def get_current_user_optional(
         return await get_current_user(credentials, db)
     except HTTPException:
         return None
+
+
+async def get_current_admin(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> AdminAccount:
+    """Operator Console auth gate — every `/admin/*` route depends on this,
+    never on `get_current_user`/`require_role`. Only ever accepts an
+    `admin_access` token (see app/auth/security.py's create_admin_access_token),
+    so a customer's own access token — even one somehow carrying a stale
+    SUPER_ADMIN role — is rejected outright by decode_token's type check
+    before an AdminAccount row is ever looked up."""
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+
+    try:
+        claims = decode_token(credentials.credentials, expected_type="admin_access")
+    except TokenError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+    try:
+        admin_id = UUID(claims["sub"])
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Malformed token subject") from exc
+
+    admin = await db.get(AdminAccount, admin_id)
+    if admin is None or not admin.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin account no longer exists")
+    if claims.get("tv") != admin.token_version:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
+
+    return admin

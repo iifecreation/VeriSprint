@@ -21,11 +21,6 @@ export default function AdminLoginPage() {
     setLoading(true);
     try {
       const pair = await api.login(email, password);
-      if (pair.user.role !== "super_admin") {
-        setError("This account isn't an operator account.");
-        setLoading(false);
-        return;
-      }
       storeTokens(pair);
       router.push("/");
     } catch {

@@ -16,6 +16,7 @@ from uuid import UUID
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import record_audit, record_audit_for_user
@@ -71,13 +72,23 @@ _STRIPE_STATUS_MAP: dict[str, SubscriptionStatus] = {
 
 
 async def _get_or_create_subscription(db: AsyncSession, workspace_id: UUID) -> Subscription:
+    """A plain select-then-insert here raced two concurrent callers (e.g. the
+    dashboard firing a couple of requests at once on page load) into both
+    seeing no row and both inserting — the second always lost to
+    Subscription.workspace_id's unique constraint with a raw 500. An
+    `ON CONFLICT DO NOTHING` upsert makes the insert itself race-safe: either
+    this call wins and inserts the row, or a concurrent one already did and
+    this one no-ops — the follow-up select finds exactly one row either way."""
     result = await db.execute(select(Subscription).where(Subscription.workspace_id == workspace_id))
     sub = result.scalar_one_or_none()
-    if sub is None:
-        sub = Subscription(workspace_id=workspace_id)
-        db.add(sub)
-        await db.flush()
-    return sub
+    if sub is not None:
+        return sub
+
+    await db.execute(
+        pg_insert(Subscription).values(workspace_id=workspace_id).on_conflict_do_nothing(index_elements=["workspace_id"])
+    )
+    result = await db.execute(select(Subscription).where(Subscription.workspace_id == workspace_id))
+    return result.scalar_one()
 
 
 @router.post("/checkout", response_model=CheckoutResponse)

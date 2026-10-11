@@ -17,6 +17,7 @@ from app.observability import record_error
 from app.routers import (
     accuracy,
     admin,
+    admin_auth,
     ai_cost,
     allocation,
     audit,
@@ -158,6 +159,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(admin_auth.router)
 app.include_router(billing.router)
 app.include_router(dora.router)
 app.include_router(efficiency.router)

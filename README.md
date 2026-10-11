@@ -43,10 +43,12 @@ apps/
                      neon-lime/glass-card) as its own copy — no shared
                      package, each app is a fully independent deploy.
   admin/            Next.js operator console — a separate app/deploy from
-                     apps/web (own login, own dark "control room" theme,
-                     own localStorage token keys) hitting the same backend
-                     API. Overview, Workspaces, Users, Errors, Metrics,
-                     Revenue, Flags, Audit — super_admin accounts only.
+                     apps/web with its own auth end to end: own login
+                     (/admin/auth/*), own AdminAccount table (not `users`),
+                     own JWT token type, own localStorage token keys — hits
+                     the same backend API otherwise. Overview, Workspaces
+                     (incl. drill-down + "view as this workspace"), Users,
+                     Errors, Metrics, Revenue, Flags, Audit.
   marketing/        Next.js public marketing site — homepage, features,
                      how it works, pricing, security & trust, docs,
                      changelog, about, contact — a separate app/deploy from
@@ -128,7 +130,7 @@ Visit http://localhost:53100. This is a content-only site (no login, no
 database access) — its "Connect a GitHub repo" and "Sign in" links point at
 the API's install flow and the dashboard app's `/login` respectively.
 
-**5. Operator console (`apps/admin`, separate app — `super_admin` only)**
+**5. Operator console (`apps/admin`, separate app, separate auth — see below)**
 
 ```bash
 cd apps/admin
@@ -138,23 +140,59 @@ echo "NEXT_PUBLIC_APP_URL=http://localhost:53000" >> .env.local
 npm run dev -- --port 53200
 ```
 
-Visit http://localhost:53200 and sign in as `superadmin@verisprint.dev` (see
-test accounts below). This is where FeatureFlags get toggled, contact-form
-messages and errors get triaged, and cross-tenant workspace/billing state
+Visit http://localhost:53200. This is where FeatureFlags get toggled,
+contact-form messages and errors get triaged, workspaces get drilled into
+(status/plan, repos, users, billing snapshot, a scoped audit trail, and
+"View as this workspace" impersonation), and cross-tenant billing state
 lives.
+
+Sign-in here is **not** a customer login — see "Operator auth" below.
 
 ## Auth & RBAC (v3)
 
-Five roles, enforced server-side on every request via a JWT-embedded
-`workspace_id` — see `app/auth/dependencies.py`:
+Four customer-facing roles, enforced server-side on every request via a
+JWT-embedded `workspace_id` — see `app/auth/dependencies.py`:
 
 | Role | Scope |
 |---|---|
-| `super_admin` | Internal operator only, never assigned to a customer. Bypasses workspace scoping everywhere (`ensure_workspace_access`) — powers the Super-Admin Dashboard. |
 | `workspace_admin` | Full control within their own workspace: billing, integrations, users, settings. |
 | `manager` | Full read access to dashboards/reports/audit trail; no billing. |
 | `developer` | Own Evidence Ledger + standup drafts; read-only team dashboard. |
 | `client` | Read-only Client Portal only — blocked from every internal route by `get_internal_user`, even ones scoped to their own workspace. |
+
+### Operator auth (apps/admin) — deliberately separate from the above
+
+Platform operators are **not** `User` rows. They live in their own
+`AdminAccount` table (`app/db/models.py`) with their own login
+(`POST /admin/auth/login`) and their own JWT token type (`admin_access`/
+`admin_refresh`, vs. the customer `access`/`refresh`) — see
+`app/routers/admin_auth.py`. A customer's token is never accepted by any
+`/admin/*` route, and an operator's token is never accepted by any
+customer-facing route, even though both happen to be signed with the same
+`JWT_SECRET` — the token's `type` claim alone makes the two domains mutually
+unusable against each other. A `UserRole.SUPER_ADMIN` enum value still
+exists on `User` for historical/backward-compat reasons only (pre-migration
+rows); nothing checks for it anymore, and it can't be newly assigned.
+
+Operator accounts are provisioned directly (no self-serve signup, no OAuth —
+email/password only). To create one locally:
+
+```bash
+cd apps/api
+.venv/bin/python -c "
+from app.auth.security import hash_password
+print(hash_password('your-password-here'))
+"
+# then INSERT INTO admin_accounts (id, email, password_hash) VALUES (gen_random_uuid(), 'you@example.com', '<hash from above>');
+```
+
+**"View as this workspace"** (`POST /admin/workspaces/{id}/impersonate`,
+from a workspace's detail page in `apps/admin`) issues a normal customer
+access token for a *real* user in that workspace — never a synthetic
+identity — so every existing authorization path just works. It's a
+15-minute access token with no refresh token (the session simply ends, no
+silent renewal), carries an `impersonated_by` claim, and is logged to the
+audit trail (`admin.impersonation_started`) the moment it's issued.
 
 Login paths: GitHub OAuth (primary), email/password (fallback, via invite or
 password reset), or per-workspace OIDC SSO (Enterprise). All three converge
@@ -374,9 +412,11 @@ correctly scoped metrics to its members' own PRs across multiple repos
 reimplementation. Team/Service CRUD and repo-to-Service assignment are in
 `/settings`; the Team filter is wired into the `/insights` Efficiency panel.
 Service-scoped querying (`service_id` as an alternative to `repo_id`) is
-live on `/efficiency` and `/allocation/profile` but not yet wired into any
-page's UI — an API-only capability for now, same as a few other
-already-shipped features document.
+live on `/efficiency` and `/allocation/profile`, and wired into the
+`/insights` page via a "Service scope" selector next to the repo picker —
+selecting a Service re-scopes the Git Efficiency Metrics and Investment
+Profile panels to that Service's member repos (DORA/Code Health/Risk Radar
+stay repo-scoped, since the backend only ever scopes those by a single repo).
 
 What hasn't run against real external services in this environment, because
 doing so needs credentials only you can provide:
@@ -402,13 +442,20 @@ doing so needs credentials only you can provide:
 ## Dev database test accounts
 
 Left in place from verification (all in the demo workspace unless noted;
-harmless to delete, kept for convenience): `superadmin@verisprint.dev`
-(super_admin, no workspace), `wsadmin@example.com` (workspace_admin),
-`dev2@example.com` (manager), `smoketest@example.com` (developer, no
-workspace), `clientuser@example.com` (client, no workspace). Password for
-each is printed in this repo's git history / session notes, not committed
-here — reset via `POST /auth/request-password-reset` if lost (rate-limited,
-see below). All Phase 2/3 `FeatureFlag`s default to `enabled_globally: false`;
+harmless to delete, kept for convenience): `wsadmin@example.com`
+(workspace_admin), `dev2@example.com` (manager), `smoketest@example.com`
+(developer, no workspace), `clientuser@example.com` (client, no workspace).
+Password for each is printed in this repo's git history / session notes, not
+committed here — reset via `POST /auth/request-password-reset` if lost
+(rate-limited, see below).
+
+`superadmin@verisprint.dev` was migrated out of `users` into the separate
+`admin_accounts` table (see "Operator auth" above) — it's no longer a
+`User`/customer login at all, and now signs in at `apps/admin` →
+`POST /admin/auth/login` with the same password it had before migrating,
+not via `/auth/*`.
+
+All Phase 2/3 `FeatureFlag`s default to `enabled_globally: false`;
 toggle from `apps/admin` → Flags to see their panels light up across
 `/insights`, `/analytics`, `/reviewers`, `/team`, `/sprints`, and `/settings`.
 

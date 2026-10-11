@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   api,
@@ -13,7 +14,7 @@ import {
   type AdminWorkspace,
   type AuditLogEntry,
   type ContactMessage,
-  type CurrentUser,
+  type CurrentAdmin,
   type PricingPlan,
 } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
@@ -22,14 +23,17 @@ import { Badge, Card, GhostButton, Input, PrimaryButton, StatCard } from "@/comp
 const PANELS = ["Overview", "Workspaces", "Users", "Errors", "Messages", "Metrics", "Revenue", "Pricing", "Flags", "Audit"] as const;
 type Panel = (typeof PANELS)[number];
 
-/** Super-Admin Dashboard (spec Section 7) — the whole reason apps/admin
- * exists as its own deploy: an internal, cross-tenant operator console,
- * separate from the customer-facing product (apps/web). Gated to
- * SUPER_ADMIN both here (redirect for UX) and, for real, on every
- * /admin/* API call server-side. */
+/** Operator Console (spec Section 7) — the whole reason apps/admin exists as
+ * its own deploy: an internal, cross-tenant operator console, separate from
+ * the customer-facing product (apps/web) down to its own auth — `api.me()`
+ * hits /admin/auth/me, gated server-side by AdminAccount, a table and token
+ * type deliberately decoupled from the customer `users` table (see
+ * AdminAccount's docstring in apps/api/app/db/models.py). A successful
+ * response here IS the authorization check; there's no separate role to
+ * compare against. */
 export default function AdminHomePage() {
   const router = useRouter();
-  const [me, setMe] = useState<CurrentUser | null | "unauthorized">(null);
+  const [me, setMe] = useState<CurrentAdmin | null | "unauthorized">(null);
   const [panel, setPanel] = useState<Panel>("Overview");
   // Lives at this level (not inside MessagesPanel) so the tab itself can
   // carry a notification badge even while a different panel is open —
@@ -42,16 +46,7 @@ export default function AdminHomePage() {
       router.replace("/login");
       return;
     }
-    api
-      .me()
-      .then((u) => {
-        if (u.role !== "super_admin") {
-          setMe("unauthorized");
-        } else {
-          setMe(u);
-        }
-      })
-      .catch(() => setMe("unauthorized"));
+    api.me().then(setMe).catch(() => setMe("unauthorized"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -88,7 +83,7 @@ export default function AdminHomePage() {
         <div>
           <h1 className="text-2xl font-bold text-[var(--foreground)]">Operator Console</h1>
           <p className="mt-1 text-sm text-[var(--text-dim)]">
-            Signed in as <span className="text-[var(--text-muted)]">{me.email ?? me.github_login}</span> — cross-tenant view.
+            Signed in as <span className="text-[var(--text-muted)]">{me.email}</span> — cross-tenant view.
           </p>
         </div>
       </div>
@@ -181,7 +176,11 @@ function WorkspacesPanel() {
           <tbody className="divide-y divide-[var(--line)]">
             {workspaces.map((ws) => (
               <tr key={ws.id}>
-                <td className="py-3 font-medium text-[var(--foreground)]">{ws.name}</td>
+                <td className="py-3">
+                  <Link href={`/workspaces/${ws.id}`} className="font-medium text-[var(--foreground)] hover:text-[var(--accent-neon)] hover:underline">
+                    {ws.name}
+                  </Link>
+                </td>
                 <td className="capitalize text-[var(--text-muted)]">{ws.plan_tier}</td>
                 <td>
                   <Badge tone={ws.status === "active" ? "success" : "danger"}>{ws.status}</Badge>
@@ -189,7 +188,10 @@ function WorkspacesPanel() {
                 <td className="text-[var(--text-muted)]">${ws.mrr.toLocaleString()}</td>
                 <td className="text-[var(--text-muted)]">{ws.repo_count}</td>
                 <td className="text-[var(--text-muted)]">{ws.user_count}</td>
-                <td>
+                <td className="flex items-center gap-2">
+                  <Link href={`/workspaces/${ws.id}`}>
+                    <GhostButton>Details</GhostButton>
+                  </Link>
                   <GhostButton onClick={() => toggleStatus(ws)}>{ws.status === "active" ? "Suspend" : "Reactivate"}</GhostButton>
                 </td>
               </tr>
@@ -345,6 +347,32 @@ function MessagesPanel({ onChange }: { onChange: () => void }) {
   );
 }
 
+/** Thin dependency-free trend line — `points` must already be newest-first
+ * (the API's own order_by). Renders oldest→newest left-to-right. */
+function Sparkline({ points }: { points: AdminSystemMetric[] }) {
+  const chronological = [...points].reverse();
+  const values = chronological.map((p) => p.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+
+  return (
+    <div className="mt-3 flex h-10 items-end gap-0.5">
+      {chronological.map((p) => {
+        const heightPct = ((p.value - min) / range) * 100;
+        return (
+          <div
+            key={p.id}
+            title={`${p.value} at ${new Date(p.recorded_at).toLocaleString()}`}
+            className="flex-1 rounded-sm bg-[var(--accent-neon)]/40 transition-colors hover:bg-[var(--accent-neon)]"
+            style={{ height: `${Math.max(heightPct, 4)}%` }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function MetricsPanel() {
   const [metrics, setMetrics] = useState<AdminSystemMetric[]>([]);
   useEffect(() => {
@@ -363,6 +391,7 @@ function MetricsPanel() {
           <h3 className="text-sm font-semibold text-[var(--foreground)]">{name}</h3>
           <p className="mt-2 text-2xl font-bold tabular-nums text-[var(--accent-neon)]">{points[0]?.value}</p>
           <p className="mt-1 text-xs text-[var(--text-dim)]">{new Date(points[0]?.recorded_at).toLocaleString()}</p>
+          {points.length > 1 && <Sparkline points={points.slice(0, 30)} />}
         </Card>
       ))}
       {metrics.length === 0 && (

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL, api } from "@/lib/api";
 import { storeTokens } from "@/lib/auth";
-import { ADMIN_APP_URL } from "@/lib/config";
 import { Input, PrimaryButton } from "@/components/ui";
 
 /** Email/password login (spec Section 6's fallback path). GitHub OAuth is the
@@ -24,11 +23,6 @@ export default function LoginPage() {
     try {
       const pair = await api.login(email, password);
       storeTokens(pair);
-      if (pair.user.role === "super_admin") {
-        // Operators live in a separate console (apps/admin), not this app.
-        window.location.href = ADMIN_APP_URL;
-        return;
-      }
       router.push("/dashboard");
     } catch {
       setError("Invalid email or password.");

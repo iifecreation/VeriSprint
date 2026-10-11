@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { storeTokens } from "@/lib/auth";
-import { ADMIN_APP_URL } from "@/lib/config";
 import { Input, PrimaryButton } from "@/components/ui";
 
 /** Where a password-reset email's link lands (`{web_base_url}/reset-password
@@ -49,10 +48,6 @@ export default function ResetPasswordPage() {
     try {
       const pair = await api.resetPassword(token, password);
       storeTokens(pair);
-      if (pair.user.role === "super_admin") {
-        window.location.href = ADMIN_APP_URL;
-        return;
-      }
       router.push("/dashboard");
     } catch {
       setError("This reset link is invalid or has expired — request a new one from the sign-in page.");

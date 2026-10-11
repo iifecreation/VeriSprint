@@ -7,6 +7,7 @@ export function Section({
   variant = "default",
   innerClassName,
   background,
+  id,
 }: {
   children: ReactNode;
   className?: string;
@@ -16,6 +17,7 @@ export function Section({
    * instead of stacking on top of the standard section padding. */
   innerClassName?: string;
   background?: ReactNode;
+  id?: string;
 }) {
   const bgClass =
     variant === "sky"
@@ -24,7 +26,7 @@ export function Section({
       ? "bg-dark-section"
       : "bg-[var(--background)]";
   return (
-    <section className={`relative overflow-hidden ${bgClass} ${className}`}>
+    <section id={id} className={`relative overflow-hidden ${bgClass} ${className}`}>
       {background}
       <div className={`mx-auto max-w-7xl px-6 relative z-10 ${innerClassName ?? "py-20 sm:py-28"}`}>{children}</div>
     </section>

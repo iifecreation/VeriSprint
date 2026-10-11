@@ -5,10 +5,19 @@ import { useRouter } from "next/navigation";
 import { storeTokens } from "@/lib/auth";
 
 /**
- * Landing point for the GitHub OAuth / SSO redirect (spec Section 6). The API
- * hands the token pair back as a URL *fragment* (`#access_token=...`), never
- * a query string — fragments never reach the server or access logs. This
- * page's only job is to read that fragment, persist it, and get out of the way.
+ * Landing point for the GitHub OAuth / SSO redirect (spec Section 6), and for
+ * the Operator Console's "View as this workspace" impersonation hand-off.
+ * The API hands the token back as a URL *fragment* (`#access_token=...`),
+ * never a query string — fragments never reach the server or access logs.
+ * This page's only job is to read that fragment, persist it, and get out of
+ * the way.
+ *
+ * `refresh_token` is present for a real sign-in but deliberately absent for
+ * an impersonation session (app/routers/admin.py's impersonate_workspace
+ * issues an access token only, by design — no silent renewal of a session
+ * started on someone else's behalf). An empty refresh token is stored as ""
+ * rather than omitted, which `getRefreshToken()`/`apiFetch` already treat as
+ * "no refresh available" with no further changes needed.
  */
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -22,12 +31,12 @@ export default function AuthCallbackPage() {
       const accessToken = fragment.get("access_token");
       const refreshToken = fragment.get("refresh_token");
 
-      if (!accessToken || !refreshToken) {
+      if (!accessToken) {
         setError("Sign-in didn't come back with a token — please try again.");
         return;
       }
 
-      storeTokens({ access_token: accessToken, refresh_token: refreshToken });
+      storeTokens({ access_token: accessToken, refresh_token: refreshToken ?? "" });
       // Clear the fragment from the URL bar before navigating away.
       window.history.replaceState(null, "", window.location.pathname);
       router.replace("/dashboard");

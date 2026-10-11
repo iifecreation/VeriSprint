@@ -3,11 +3,13 @@
 import { API_BASE_URL } from "./config";
 
 /**
- * Token storage + refresh (spec Section 6) — same scheme as apps/web, kept
- * as a separate copy rather than a shared package since this is a
- * standalone deploy with its own login. A super_admin token works against
- * either app; this one just never stores/reads apps/web's, and vice versa
- * (distinct localStorage keys), so signing out of one doesn't affect the other.
+ * Token storage + refresh — same JWT-pair scheme as apps/web, kept as a
+ * separate copy rather than a shared package since this is a standalone
+ * deploy with its own login (POST /admin/auth/login) against a separate
+ * AdminAccount table (see apps/api/app/db/models.py). The two are mutually
+ * unusable by design: an admin_access token is rejected by apps/web's auth
+ * and vice versa, independent of the distinct localStorage keys below —
+ * see app/auth/security.py's create_admin_access_token docstring.
  */
 
 const ACCESS_TOKEN_KEY = "verisprint_admin_access_token";
@@ -59,7 +61,7 @@ export async function refreshAccessToken(): Promise<string | null> {
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        const res = await fetch(`${API_BASE_URL}/admin/auth/refresh`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ refresh_token: refreshToken }),
@@ -86,7 +88,7 @@ export async function logout(): Promise<void> {
   clearTokens();
   if (token) {
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      await fetch(`${API_BASE_URL}/admin/auth/logout`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
     } catch {
       // Token's cleared client-side either way.
     }
