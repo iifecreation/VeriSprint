@@ -159,6 +159,14 @@ export type AuditLogEntry = {
   created_at: string;
 };
 
+export type ServerHealth = {
+  ok: boolean;
+  status: string;
+  url: string;
+  database?: string;
+  error?: string;
+};
+
 async function doFetch(path: string, init: RequestInit | undefined, accessToken: string | null): Promise<Response> {
   return fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -171,35 +179,65 @@ async function doFetch(path: string, init: RequestInit | undefined, accessToken:
   });
 }
 
-/** For endpoints reachable without a session (login) — never attaches a
- * stale token or tries to refresh on 401 (a wrong password is not "your
- * session expired"). */
+/** For endpoints reachable without a session (login, pricing-plans) */
 async function apiFetchNoAuth<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await doFetch(path, init, null);
+  let res: Response;
+  try {
+    res = await doFetch(path, init, null);
+  } catch (err: unknown) {
+    throw new Error(`Server unreachable at ${API_BASE_URL} (${(err as Error).message})`);
+  }
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status} ${await res.text()}`);
+    const errorBody = await res.text().catch(() => "");
+    throw new Error(`API ${path} failed (${res.status}): ${errorBody || res.statusText}`);
   }
   return res.json() as Promise<T>;
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  let res = await doFetch(path, init, getAccessToken());
+  let res: Response;
+  try {
+    res = await doFetch(path, init, getAccessToken());
+  } catch (err: unknown) {
+    throw new Error(`Server unreachable at ${API_BASE_URL} (${(err as Error).message})`);
+  }
   if (res.status === 401 && getRefreshToken()) {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
-      res = await doFetch(path, init, newToken);
-    } else if (typeof window !== "undefined") {
-      clearTokens();
-      window.location.href = "/login";
+    try {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        res = await doFetch(path, init, newToken);
+      } else if (typeof window !== "undefined") {
+        clearTokens();
+        window.location.href = "/login";
+      }
+    } catch {
+      if (typeof window !== "undefined") {
+        clearTokens();
+        window.location.href = "/login";
+      }
     }
   }
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status} ${await res.text()}`);
+    const errorBody = await res.text().catch(() => "");
+    throw new Error(`API ${path} failed (${res.status}): ${errorBody || res.statusText}`);
   }
   return res.json() as Promise<T>;
 }
 
 export const api = {
+  checkServerHealth: async (): Promise<ServerHealth> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/health`, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({ status: "ok" }));
+        return { ok: true, status: data.status || "ok", url: API_BASE_URL, database: "ok" };
+      }
+      return { ok: false, status: `HTTP ${res.status}`, url: API_BASE_URL };
+    } catch (err: unknown) {
+      return { ok: false, status: "offline", url: API_BASE_URL, error: (err as Error).message };
+    }
+  },
+
   login: (email: string, password: string) =>
     apiFetchNoAuth<TokenPair>("/admin/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => apiFetch<CurrentAdmin>("/admin/auth/me"),

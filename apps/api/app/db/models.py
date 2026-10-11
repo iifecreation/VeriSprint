@@ -296,9 +296,43 @@ class Commit(Base):
     # queued -> ingested -> analyzed -> failed
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
+    # Code Provenance (app/code_provenance.py) — a per-commit line-count
+    # breakdown, nullable until app/workers/code_provenance.py's
+    # classify_code_provenance job has run (None means "not yet analyzed",
+    # never conflated with a real 0). Deliberately NOT a content-based guess
+    # at who/what wrote a line — see that module's docstring for exactly
+    # what each bucket does and doesn't claim.
+    original_engineering_lines: Mapped[int | None] = mapped_column(nullable=True)
+    ai_disclosed_lines: Mapped[int | None] = mapped_column(nullable=True)
+    duplicate_or_boilerplate_lines: Mapped[int | None] = mapped_column(nullable=True)
+
     repo: Mapped[Repo] = relationship(back_populates="commits")
     pull_request: Mapped[PullRequest | None] = relationship(back_populates="commits")
     evidence_items: Mapped[list["EvidenceItem"]] = relationship(back_populates="commit")
+
+
+class CodeLineFingerprint(Base):
+    """
+    Real, per-repo copy-paste detection backing Code Provenance's
+    "duplicate" bucket (app/code_provenance.py) — a SHA-256 of each
+    meaningful added line's normalized content, the first time it was ever
+    added to this repo's tracked history. A later commit adding a line whose
+    hash already exists here is flagged as a duplicate of its own earlier
+    work, not of anything outside this repo — never compared across repos or
+    workspaces, so this can never leak one tenant's code into another's.
+
+    Deliberately stores a hash, not the line itself: enough to detect reuse,
+    never enough to reconstruct the original source from this table alone.
+    """
+
+    __tablename__ = "code_line_fingerprints"
+    __table_args__ = (UniqueConstraint("repo_id", "line_hash"),)
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    repo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("repos.id"), index=True)
+    line_hash: Mapped[str] = mapped_column(String(64), index=True)
+    first_seen_commit_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("commits.id"))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class PullRequestReview(Base):

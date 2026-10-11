@@ -72,6 +72,7 @@ async def ingest_push(ctx, payload: dict) -> None:
             from app.queue.client import enqueue
 
             await enqueue("analyze_commit", str(commit.id))
+            await enqueue("classify_code_provenance", str(commit.id))
 
         await db.commit()
 
@@ -172,6 +173,7 @@ async def ingest_pull_request(ctx, payload: dict) -> None:
             from app.queue.client import enqueue
 
             await enqueue("analyze_commit", str(commit.id))
+            await enqueue("classify_code_provenance", str(commit.id))
 
         await db.commit()
 

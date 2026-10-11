@@ -16,6 +16,7 @@ from app.observability import capture_worker_errors
 from app.workers.analysis import analyze_commit
 from app.workers.anomaly import detect_activity_anomalies
 from app.workers.blockers import detect_blockers
+from app.workers.code_provenance import classify_code_provenance
 from app.workers.confidence import compute_confidence
 from app.workers.digest import send_daily_digest
 from app.workers.drift import detect_ticket_drift
@@ -56,6 +57,7 @@ class WorkerSettings:
         capture_worker_errors("ingestion")(ingest_deployment_status),
         capture_worker_errors("github_write")(apply_pr_policy),
         capture_worker_errors("llm")(analyze_commit),
+        capture_worker_errors("ingestion")(classify_code_provenance),
         capture_worker_errors("llm")(compute_confidence),
         capture_worker_errors("reconciliation")(reconcile_ticket),
         capture_worker_errors("llm")(generate_standup),
