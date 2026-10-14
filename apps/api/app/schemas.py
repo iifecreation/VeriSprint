@@ -601,6 +601,43 @@ class ContributionReport(BaseModel):
     method_note: str = "Detected via self-disclosed AI attribution in commit messages (e.g. Co-Authored-By trailers) — not a behavioral guess."
 
 
+class CommitProvenanceOut(BaseModel):
+    commit_id: uuid.UUID
+    sha: str
+    author_github_login: str
+    message_summary: str
+    committed_at: datetime
+    # Null means "not yet analyzed" (worker hasn't run for this commit yet) —
+    # never conflated with a real 0.
+    original_engineering_lines: int | None
+    ai_disclosed_lines: int | None
+    duplicate_or_boilerplate_lines: int | None
+    total_lines: int | None
+
+
+class CodeProvenanceReport(BaseModel):
+    period_start: datetime
+    period_end: datetime
+    total_original_engineering_lines: int
+    total_ai_disclosed_lines: int
+    total_duplicate_or_boilerplate_lines: int
+    original_engineering_pct: float | None
+    ai_disclosed_pct: float | None
+    duplicate_or_boilerplate_pct: float | None
+    analyzed_commit_count: int
+    pending_commit_count: int
+    commits: list[CommitProvenanceOut]
+    method_note: str = (
+        "AI-disclosed = commit message explicitly names an AI tool (Co-Authored-By trailer or "
+        "'Generated with' line) — real disclosure, not a content-based guess. Duplicate/boilerplate = "
+        "a line byte-identical to one already added earlier in this same repo's tracked history, or a "
+        "near-zero-signal line (blank, punctuation-only, or a lockfile/vendored/generated file). "
+        "Original engineering = everything else — new to this repo's history and not AI-disclosed. "
+        "That label means exactly that, not 'verified human-written': undisclosed AI use is invisible "
+        "to this signal, and a repo's first-ever ingested commit has nothing yet to compare against."
+    )
+
+
 class AllocationEntry(BaseModel):
     label: str
     commit_count: int

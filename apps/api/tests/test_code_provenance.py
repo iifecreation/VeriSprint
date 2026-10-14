@@ -100,6 +100,21 @@ def test_vendored_directory_lines_are_boilerplate():
     assert d.duplicate_or_boilerplate_lines == 1
 
 
+def test_a_path_merely_containing_vendor_as_a_substring_is_not_flagged():
+    # Regression: "myvendor/x.go" must not match the "vendor" directory
+    # segment just because it contains that substring — same pitfall as
+    # app/pr_policy.py's _is_safe_path (see that module's own regression test).
+    diff = """diff --git a/myvendor/handler.go b/myvendor/handler.go
+--- a/myvendor/handler.go
++++ b/myvendor/handler.go
+@@ -1,0 +1,1 @@
++func HandleRealBusinessLogic(ctx context.Context) error {
+"""
+    d = classify_commit_provenance(diff=diff, is_ai_assisted=False, known_hashes=set())
+    assert d.original_engineering_lines == 1
+    assert d.duplicate_or_boilerplate_lines == 0
+
+
 def test_candidate_line_hashes_excludes_boilerplate_and_low_signal_files():
     hashes = candidate_line_hashes(SIMPLE_DIFF)
     assert len(hashes) == 3

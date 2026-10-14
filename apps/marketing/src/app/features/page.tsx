@@ -11,7 +11,7 @@ import { PRODUCTS } from "@/lib/products";
 
 export const metadata: Metadata = {
   title: "Features — VeriSprint",
-  description: "Six product areas, thirty-eight features, every one traced back to a real commit — Evidence Ledger, Team Intelligence, Risk & Automation, Reporting, Team Health, and Enterprise.",
+  description: "Six product areas, thirty-nine features, every one traced back to a real commit — Evidence Ledger, Team Intelligence, Risk & Automation, Reporting, Team Health, and Enterprise.",
 };
 
 const SPOTLIGHT = [

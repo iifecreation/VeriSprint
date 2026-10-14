@@ -28,6 +28,7 @@ from app.routers import (
     chat,
     client_portal,
     code_health,
+    code_provenance,
     contact,
     contributions,
     dashboard,
@@ -180,6 +181,7 @@ app.include_router(dora.router)
 app.include_router(efficiency.router)
 app.include_router(changelog.router)
 app.include_router(code_health.router)
+app.include_router(code_provenance.router)
 app.include_router(contributions.router)
 app.include_router(allocation.router)
 app.include_router(risk.router)

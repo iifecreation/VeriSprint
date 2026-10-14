@@ -47,7 +47,9 @@ async def db() -> AsyncIterator[AsyncSession]:
 # one repo. New Phase tables get appended here, not inserted into the
 # per-test bodies — one place to keep current.
 _CLEANUP_TABLES_BY_REPO = [
-    "deployments", "audit_log_entries", "team_goals", "tickets", "commits", "pull_requests", "sprints",
+    "deployments", "audit_log_entries", "team_goals", "tickets",
+    "code_line_fingerprints",  # FK to commits.id — must clear before "commits" below
+    "commits", "pull_requests", "sprints",
 ]
 _CLEANUP_TABLES_BY_WORKSPACE = ["team_goals", "teams", "services", "audit_log_entries", "subscriptions", "users"]
 # Tables one join away from repo_id — cleaned up before _CLEANUP_TABLES_BY_REPO

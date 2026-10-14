@@ -538,6 +538,33 @@ export type ContributionReport = {
   method_note: string;
 };
 
+export type CommitProvenance = {
+  commit_id: string;
+  sha: string;
+  author_github_login: string;
+  message_summary: string;
+  committed_at: string;
+  original_engineering_lines: number | null;
+  ai_disclosed_lines: number | null;
+  duplicate_or_boilerplate_lines: number | null;
+  total_lines: number | null;
+};
+
+export type CodeProvenanceReport = {
+  period_start: string;
+  period_end: string;
+  total_original_engineering_lines: number;
+  total_ai_disclosed_lines: number;
+  total_duplicate_or_boilerplate_lines: number;
+  original_engineering_pct: number | null;
+  ai_disclosed_pct: number | null;
+  duplicate_or_boilerplate_pct: number | null;
+  analyzed_commit_count: number;
+  pending_commit_count: number;
+  commits: CommitProvenance[];
+  method_note: string;
+};
+
 export type AllocationEntry = { label: string; commit_count: number; additions: number; deletions: number; pct_of_commits: number };
 
 export type AllocationReport = {
@@ -871,6 +898,10 @@ export const api = {
   // --- AI Contribution Tracker ---
   getContributions: (repoId: string, periodStart: string, periodEnd: string) =>
     apiFetch<ContributionReport>(`/contributions?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
+
+  // --- Code Provenance ---
+  getCodeProvenance: (repoId: string, periodStart: string, periodEnd: string) =>
+    apiFetch<CodeProvenanceReport>(`/code-provenance?repo_id=${repoId}&period_start=${periodStart}&period_end=${periodEnd}`),
 
   // --- Investment Allocation Dashboard ---
   getAllocation: (workspaceId: string, periodStart: string, periodEnd: string) =>

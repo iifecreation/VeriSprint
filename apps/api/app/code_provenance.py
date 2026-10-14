@@ -39,17 +39,20 @@ Evidence Ledger exists to avoid. Instead:
 import hashlib
 import re
 from dataclasses import dataclass, field
+from pathlib import PurePosixPath
 
 _PUNCTUATION_ONLY = re.compile(r"^[{}()\[\];,.\-+*/]+$")
 _MIN_MEANINGFUL_LENGTH = 3
 
 # Lockfiles, minified bundles, and vendored/generated directories carry
 # effectively zero differentiated engineering signal regardless of content —
-# skipped at the file level rather than hashed line-by-line.
-_LOW_SIGNAL_FILE_PATTERNS = (
-    ".lock", "-lock.json", "/vendor/", "/node_modules/", "/dist/", "/build/",
-    ".min.js", ".min.css", "/generated/", ".generated.", "package-lock.json",
-)
+# skipped at the file level rather than hashed line-by-line. Matched as
+# exact path segments/suffixes (not raw substrings) so "vendor/x.go" and
+# "src/vendor/x.go" both match while "myvendor/x.go" correctly doesn't —
+# same substring-matching pitfall app/pr_policy.py's _is_safe_path avoids.
+_LOW_SIGNAL_DIR_SEGMENTS = ("vendor", "node_modules", "dist", "build", "generated")
+_LOW_SIGNAL_SUFFIXES = (".lock", ".min.js", ".min.css")
+_LOW_SIGNAL_EXACT_NAMES = ("package-lock.json",)
 
 
 def _parse_added_lines(diff: str) -> list[tuple[str, str]]:
@@ -69,8 +72,14 @@ def _parse_added_lines(diff: str) -> list[tuple[str, str]]:
 
 
 def _is_low_signal_file(path: str) -> bool:
-    lower = path.lower()
-    return any(pattern in lower for pattern in _LOW_SIGNAL_FILE_PATTERNS)
+    lower = PurePosixPath(path.lower())
+    if lower.name in _LOW_SIGNAL_EXACT_NAMES:
+        return True
+    if any(lower.name.endswith(suffix) for suffix in _LOW_SIGNAL_SUFFIXES):
+        return True
+    if any(part in _LOW_SIGNAL_DIR_SEGMENTS for part in lower.parts):
+        return True
+    return False
 
 
 def _is_boilerplate_line(line: str) -> bool:

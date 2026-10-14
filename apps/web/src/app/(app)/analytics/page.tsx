@@ -8,12 +8,13 @@ import {
   type AllocationReport,
   type CapitalizationReport,
   type ChangelogDay,
+  type CodeProvenanceReport,
   type ContributionReport,
   type ValueStreamReport,
 } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
 import { useAccessTokenClaims } from "@/lib/auth";
-import { Card, Input, LoadingState, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
+import { Badge, Card, Input, LoadingState, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
 
 const FLAG_KEYS = [
   "value_stream_view",
@@ -22,6 +23,7 @@ const FLAG_KEYS = [
   "visual_changelog",
   "ai_contribution_tracker",
   "ai_tool_cost_tracking",
+  "code_provenance",
 ];
 
 function todayISO() {
@@ -87,6 +89,9 @@ export default function AnalyticsPage() {
           </Panel>
           <Panel title="AI Tool Cost Tracking" enabled={flags.ai_tool_cost_tracking}>
             {flags.ai_tool_cost_tracking && <AIToolCostPanel repoId={repoId} />}
+          </Panel>
+          <Panel title="Code Provenance" enabled={flags.code_provenance}>
+            {repoId && flags.code_provenance && <CodeProvenancePanel repoId={repoId} start={periodStart} end={periodEnd} />}
           </Panel>
         </div>
       )}
@@ -388,6 +393,89 @@ function ContributionsPanel({ repoId, start, end }: { repoId: string; start: str
         ))}
       </ul>
       <p className="mt-3 text-xs text-[var(--text-dim)]">{data.method_note}</p>
+    </div>
+  );
+}
+
+function ProvenanceBar({ report }: { report: CodeProvenanceReport }) {
+  const original = report.original_engineering_pct ?? 0;
+  const ai = report.ai_disclosed_pct ?? 0;
+  const dup = report.duplicate_or_boilerplate_pct ?? 0;
+  return (
+    <div>
+      <div className="flex h-3 w-full overflow-hidden rounded-full bg-[var(--surface-raised)]">
+        {original > 0 && <div className="h-full bg-[var(--accent-neon)]" style={{ width: `${original}%` }} />}
+        {ai > 0 && <div className="h-full bg-violet-400" style={{ width: `${ai}%` }} />}
+        {dup > 0 && <div className="h-full bg-amber-400" style={{ width: `${dup}%` }} />}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-dim)]">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-[var(--accent-neon)]" /> Original engineering ({original}%)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-violet-400" /> AI-disclosed ({ai}%)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-amber-400" /> Duplicate/boilerplate ({dup}%)
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function CodeProvenancePanel({ repoId, start, end }: { repoId: string; start: string; end: string }) {
+  const [report, setReport] = useState<CodeProvenanceReport | null>(null);
+  useEffect(() => {
+    // Deferred to a microtask — see dashboard/page.tsx for why.
+    queueMicrotask(() => {
+      setReport(null);
+      api.getCodeProvenance(repoId, start, end).then(setReport);
+    });
+  }, [repoId, start, end]);
+
+  if (!report) return <div className="mt-3"><LoadingState /></div>;
+  if (report.commits.length === 0) return <p className="mt-2 text-sm text-[var(--text-dim)]">No commits in this period yet.</p>;
+
+  const grandTotal =
+    report.total_original_engineering_lines + report.total_ai_disclosed_lines + report.total_duplicate_or_boilerplate_lines;
+
+  return (
+    <div className="mt-3">
+      {grandTotal > 0 ? (
+        <ProvenanceBar report={report} />
+      ) : (
+        <p className="text-sm text-[var(--text-dim)]">No analyzed lines yet in this period.</p>
+      )}
+      {report.pending_commit_count > 0 && (
+        <p className="mt-3 text-xs text-[var(--text-dim)]">
+          {report.pending_commit_count} commit{report.pending_commit_count === 1 ? "" : "s"} in this period{" "}
+          {report.pending_commit_count === 1 ? "hasn't" : "haven't"} been analyzed yet — line counts will appear once
+          ingestion catches up.
+        </p>
+      )}
+
+      <div className="mt-4 space-y-1.5">
+        {report.commits.slice(0, 25).map((c) => (
+          <div key={c.commit_id} className="flex items-center justify-between gap-3 text-sm">
+            <div className="min-w-0 flex-1">
+              <span className="font-mono text-xs text-[var(--text-dim)]">{c.sha.slice(0, 7)}</span>{" "}
+              <span className="truncate text-[var(--text-muted)]">{c.message_summary || "(no message)"}</span>
+            </div>
+            {c.total_lines === null ? (
+              <Badge tone="default">pending</Badge>
+            ) : (
+              <span className="shrink-0 text-xs text-[var(--text-dim)]">
+                {c.original_engineering_lines}/{c.ai_disclosed_lines}/{c.duplicate_or_boilerplate_lines}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      {report.commits.length > 25 && (
+        <p className="mt-2 text-xs text-[var(--text-dim)]">Showing the 25 most recent of {report.commits.length} commits.</p>
+      )}
+
+      <p className="mt-3 text-xs text-[var(--text-dim)]">{report.method_note}</p>
     </div>
   );
 }

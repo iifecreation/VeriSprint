@@ -36,6 +36,7 @@ import {
   Layers,
   Workflow,
   Milestone,
+  Fingerprint,
 } from "lucide-react";
 
 export type ProductFeature = { icon: LucideIcon; title: string; body: string };
@@ -66,6 +67,7 @@ export const PRODUCTS: Product[] = [
       { icon: Target, title: "Confidence Score", body: "A 0–100 score per ticket, computed from its real Evidence Ledger, with the rationale always visible next to the number." },
       { icon: Activity, title: "Code Health Signals", body: "A transparent health score built from real signal — tests added weighed against missing tests, dead code, and open TODOs — feeding directly into the Confidence Score. Our honest answer to \"durable change\" scoring: we don't claim to track line-survival across history, because we don't have that data to back it." },
       { icon: History, title: "Historical Accuracy", body: "Per person, per month: how often claimed progress actually held up against verified evidence, tracked over time." },
+      { icon: Fingerprint, title: "Code Provenance", body: "Every commit's added lines broken into Original Engineering, AI-Disclosed, and Duplicate/Boilerplate. AI-disclosed is real self-disclosure (the same Co-Authored-By signal as the AI Contribution Tracker), never a content-based guess at what AI wrote. Duplicate/boilerplate is real line-level copy-paste detection within your own repo's history, plus near-zero-signal lines (blank, lockfiles, vendored code). \"Original\" means exactly that — new to your repo's history and not AI-disclosed — not a claim of verified human authorship." },
     ],
   },
   {

@@ -28,10 +28,15 @@ async def classify_code_provenance(ctx, commit_id: str) -> None:
         candidates = candidate_line_hashes(diff)
         known_hashes: set[str] = set()
         if candidates:
+            # Excludes fingerprints this *same* commit itself first recorded
+            # — without this, re-running a job (arq retry, or a manual
+            # re-trigger) would find its own earlier insert and flag every
+            # line as a duplicate of itself on the second pass.
             result = await db.execute(
                 select(CodeLineFingerprint.line_hash).where(
                     CodeLineFingerprint.repo_id == commit.repo_id,
                     CodeLineFingerprint.line_hash.in_(candidates),
+                    CodeLineFingerprint.first_seen_commit_id != commit.id,
                 )
             )
             known_hashes = {row[0] for row in result.all()}
