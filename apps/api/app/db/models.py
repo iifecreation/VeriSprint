@@ -134,7 +134,7 @@ class Workspace(Base):
     # discipline as WorkspaceSSOConfig.scim_token. Null until generated.
     mcp_token: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     # Set once, at creation (see app/routers/github_app.py::_handle_installation_created)
-    # to created_at + 2 days — never extended automatically. A workspace's
+    # to created_at + TRIAL_DAYS (30 by default) — never extended automatically. A workspace's
     # real, effective access is `app.billing_access.workspace_has_active_access`,
     # which also honors `plan_tier != FREE` (a real paid plan); this column
     # alone is just the trial clock.

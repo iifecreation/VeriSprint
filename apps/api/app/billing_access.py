@@ -1,7 +1,7 @@
 """
 Trial + paywall enforcement: the actual gate deciding whether a workspace's
 data-serving endpoints respond or 402. Every workspace starts on a real,
-timestamped 2-day trial (`Workspace.trial_ends_at`, set once at creation —
+timestamped 30-day trial (`Workspace.trial_ends_at`, set once at creation —
 see app/routers/github_app.py::_handle_installation_created) rather than
 staying on an unlimited implicit free tier forever, which is what this repo
 did before this module existed: connect a repo, use every core feature
@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 def workspace_has_active_access(workspace: Workspace) -> bool:
     """True if this workspace should be able to use core product features
     right now — either because it has (or recently had — see the PAST_DUE
-    grace-period note below) a real paid plan, or because its 2-day trial
+    grace-period note below) a real paid plan, or because its free trial
     hasn't run out yet.
 
     Checking `plan_tier != FREE` rather than re-querying `Subscription`

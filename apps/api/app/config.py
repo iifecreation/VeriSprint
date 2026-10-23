@@ -92,7 +92,7 @@ class Settings(BaseSettings):
     # How long a brand-new workspace can use core features before it needs a
     # paid plan — see app/billing_access.py. A config value rather than a
     # hardcoded constant so it can be tuned without a redeploy.
-    trial_days: int = Field(default=2, alias="TRIAL_DAYS")
+    trial_days: int = Field(default=30, alias="TRIAL_DAYS")
 
     # Ticket sync (optional for MVP demo; manual entry works without it)
     jira_api_token: str = Field(default="", alias="JIRA_API_TOKEN")

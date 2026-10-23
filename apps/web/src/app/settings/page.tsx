@@ -148,7 +148,14 @@ function BillingSection() {
         <div>
           <h2 className="font-semibold text-[var(--foreground)]">Plan &amp; Billing</h2>
           <p className="mt-1 text-xs text-[var(--text-dim)]">
-            Current plan: <strong className="text-[var(--text-muted)]">{TIER_LABEL[sub.plan_tier] ?? sub.plan_tier}</strong>
+            Current plan:{" "}
+            <strong className="text-[var(--text-muted)]">
+              {sub.plan_tier === "free" && sub.trial_ends_at
+                ? sub.has_active_access
+                  ? `Free trial — ends ${new Date(sub.trial_ends_at).toLocaleDateString()}`
+                  : "Free trial ended"
+                : TIER_LABEL[sub.plan_tier] ?? sub.plan_tier}
+            </strong>
             {sub.status !== "trialing" && <> · {sub.status}</>}
             {sub.mrr > 0 && <> · ${sub.mrr.toLocaleString()}/mo</>}
           </p>

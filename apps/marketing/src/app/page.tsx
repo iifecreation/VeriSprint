@@ -204,12 +204,12 @@ export default function HomePage() {
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row relative z-20">
               <Link href={INSTALL_URL} className="w-full sm:w-auto">
                 <ShimmerButton background="linear-gradient(135deg, #74c9d3, #2f7d86)" className="w-full text-lg text-[#04201f] font-semibold shadow-[0_0_50px_rgba(79,184,196,0.3)]">
-                  Connect a repo, free <span className="ml-2">→</span>
+                  Start your 30-day free trial <span className="ml-2">→</span>
                 </ShimmerButton>
               </Link>
               <SecondaryButton href="/how-it-works" className="w-full sm:w-auto text-lg px-10 py-4">See how it works</SecondaryButton>
             </div>
-            <p className="mt-6 text-sm text-[var(--text-dim)]">No credit card. No sales call. First Evidence Ledger the same day you connect.</p>
+            <p className="mt-6 text-sm text-[var(--text-dim)]">30 days free. No credit card. No sales call. First Evidence Ledger the same day you connect.</p>
           </FadeInOnLoad>
         </div>
 
@@ -510,7 +510,7 @@ export default function HomePage() {
             items={[
               "Read-only GitHub scopes — verify in the App's own permission screen",
               "Every score links back to its evidence — verify in your own dashboard",
-              "Free tier, no time limit, no card required — verify in 5 minutes",
+              "30-day free trial, no card required — verify in 5 minutes",
             ]}
           />
         </Reveal>
@@ -538,8 +538,8 @@ export default function HomePage() {
                 answer: "No. Diffs are sent to the configured LLM provider (Claude API by default) for that one analysis call and are not used to train any model. If your policy doesn't allow sending code to a third-party API at all, point VeriSprint at a self-hosted, OpenAI-compatible model instead — see Security.",
               },
               {
-                question: "What happens on the Free tier?",
-                answer: "One connected repo, the full Evidence Ledger and Confidence Score pipeline, claimed-vs-shipped reconciliation, auto-drafted standups, and the Client Proof-of-Work Portal — no time limit, no credit card. See Pricing for what each paid tier adds.",
+                question: "What do I get in the free trial?",
+                answer: "30 days of the full Evidence Ledger and Confidence Score pipeline, claimed-vs-shipped reconciliation, auto-drafted standups, and the Client Proof-of-Work Portal — no credit card needed to start. Pick a plan any time before the trial ends to keep going; see Pricing for what each tier includes.",
               },
               {
                 question: "How is this different from Jellyfish, LinearB, GitClear, Swarmia, or Allstacks?",
@@ -555,10 +555,10 @@ export default function HomePage() {
         <Reveal className="mx-auto max-w-4xl text-center">
           <h2 className="text-4xl font-extrabold text-[var(--foreground)] sm:text-6xl mb-8 leading-tight">We combine human insight <br /> with artificial intelligence</h2>
           <p className="text-xl text-[var(--text-muted)] mb-12 max-w-2xl mx-auto leading-relaxed">
-            Ready to see what your team actually shipped? Start your free trial today and say goodbye to status update theater.
+            Ready to see what your team actually shipped? Start your 30-day free trial today and say goodbye to status update theater.
           </p>
           <Link href={INSTALL_URL} className="inline-block">
-            <ShimmerButton background="linear-gradient(135deg, #74c9d3, #2f7d86)" className="text-lg px-10 py-3.5 text-[#04201f] font-semibold">Start for free</ShimmerButton>
+            <ShimmerButton background="linear-gradient(135deg, #74c9d3, #2f7d86)" className="text-lg px-10 py-3.5 text-[#04201f] font-semibold">Start your free trial</ShimmerButton>
           </Link>
         </Reveal>
       </Section>
