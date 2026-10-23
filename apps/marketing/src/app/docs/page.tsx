@@ -85,7 +85,7 @@ const ROLE_GUIDES = [
     icon: ShieldCheck,
     role: "Workspace Admins",
     start: "Settings",
-    body: "Settings is where billing-adjacent config lives: white-label branding for the Client Portal, Team (invite/remove people, change roles), Integrations, and SSO/SCIM for Enterprise. You're also the one who can request Phase 2/3 features (DORA, Analytics, Pulse Surveys, and the rest) get turned on for your workspace.",
+    body: "Settings is where billing-adjacent config lives: white-label branding for the Client Portal, Team (invite/remove people, change roles), Integrations, and SSO/SCIM for Enterprise. You're also the one who can request advanced features (DORA, Analytics, Pulse Surveys, and the rest) get turned on for your workspace.",
   },
 ] as const;
 
@@ -274,7 +274,7 @@ export default function DocsPage() {
                 answer: "Nothing is backfilled retroactively — evidence only starts appearing from the next push after you connect. If it's been a while since anyone pushed, push something small (even a comment change) to see the pipeline run.",
               },
               {
-                question: "A Phase 2/3 feature I read about isn't showing up.",
+                question: "An advanced feature I read about isn't showing up.",
                 answer: "Most of the deeper features (DORA, Analytics, Pulse Surveys, Investment Allocation, and the rest) sit behind per-workspace feature flags, off by default — these are turned on platform-side, not by a Workspace Admin, so contact us and we'll flip it on for your workspace.",
               },
               {

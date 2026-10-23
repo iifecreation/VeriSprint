@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type CurrentUser, type Integration, type MCPConfig, type PricingPlan, type Subscription, type WorkspaceSSOConfig, type WorkspaceSettings } from "@/lib/api";
+import { api, errorMessage, type CurrentUser, type Integration, type MCPConfig, type PricingPlan, type Subscription, type WorkspaceSSOConfig, type WorkspaceSettings } from "@/lib/api";
 import { useAccessTokenClaims } from "@/lib/auth";
 import { API_BASE_URL } from "@/lib/config";
 import { Badge, Card, Input, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
@@ -20,6 +20,7 @@ const ROLE_LABEL: Record<string, string> = {
 export default function SettingsPage() {
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const workspaceId = useAccessTokenClaims()?.workspace_id ?? null;
 
   useEffect(() => {
@@ -28,16 +29,21 @@ export default function SettingsPage() {
 
   async function handleSave() {
     if (!settings || !workspaceId) return;
-    const updated = await api.updateSettings(workspaceId, {
-      name: settings.name,
-      logo_url: settings.logo_url,
-      primary_color_hex: settings.primary_color_hex,
-      avg_standup_minutes: settings.avg_standup_minutes,
-      hourly_rate_usd: settings.hourly_rate_usd,
-    });
-    setSettings(updated);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSaveError(null);
+    try {
+      const updated = await api.updateSettings(workspaceId, {
+        name: settings.name,
+        logo_url: settings.logo_url,
+        primary_color_hex: settings.primary_color_hex,
+        avg_standup_minutes: settings.avg_standup_minutes,
+        hourly_rate_usd: settings.hourly_rate_usd,
+      });
+      setSettings(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setSaveError(`Couldn't save: ${errorMessage(e)}`);
+    }
   }
 
   if (!workspaceId) return <div className="mx-auto max-w-lg px-6 py-16 text-sm text-[var(--text-dim)]">Sign in to a workspace to manage settings.</div>;
@@ -77,6 +83,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3 pt-2">
           <PrimaryButton onClick={handleSave}>Save</PrimaryButton>
           {saved && <span className="text-sm font-medium text-emerald-600">Saved.</span>}
+          {saveError && <span className="text-sm text-rose-600">{saveError}</span>}
         </div>
       </Card>
 
@@ -116,7 +123,7 @@ function BillingSection() {
       });
       window.location.href = checkout_url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't start checkout — try again in a moment.");
+      setError(errorMessage(e, "Couldn't start checkout — try again in a moment."));
     } finally {
       setBusyTier(null);
     }
@@ -128,11 +135,12 @@ function BillingSection() {
       const { portal_url } = await api.createBillingPortal(`${window.location.origin}/settings`);
       window.location.href = portal_url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't open the billing portal.");
+      setError(errorMessage(e, "Couldn't open the billing portal."));
     }
   }
 
   if (!sub) return null;
+  const purchasable = plans.filter((p) => (provider === "stripe" ? p.has_stripe_price : p.has_paystack_plan));
 
   return (
     <Card className="mt-8 space-y-5">
@@ -169,9 +177,9 @@ function BillingSection() {
         <p className="mt-1 text-xs text-[var(--text-dim)]">Paystack is for workspaces billed in a country Stripe doesn&apos;t support payouts to.</p>
       </div>
 
-      {plans.length > 0 && (
+      {purchasable.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-3">
-          {plans.map((p) => (
+          {purchasable.map((p) => (
             <div key={p.tier} className={`rounded-xl border p-4 ${sub.plan_tier === p.tier ? "border-brand bg-brand/5" : "border-[var(--line)]"}`}>
               <p className="font-semibold text-[var(--foreground)]">{p.name}</p>
               <p className="mt-1 text-2xl font-bold text-[var(--foreground)]">
@@ -189,7 +197,11 @@ function BillingSection() {
           ))}
         </div>
       )}
-      {plans.length === 0 && <p className="text-xs text-[var(--text-dim)]">No self-serve plans configured yet.</p>}
+      {purchasable.length === 0 && (
+        <p className="text-xs text-[var(--text-dim)]">
+          Online checkout isn&apos;t open yet — email <a href="mailto:hello@verisprint.dev" className="underline">hello@verisprint.dev</a> to upgrade.
+        </p>
+      )}
       {error && <p className="rounded-lg bg-rose-500/15 p-3 text-xs text-rose-400">{error}</p>}
     </Card>
   );
@@ -229,8 +241,8 @@ function TeamSection() {
       setName("");
       await refresh();
       setStatus("idle");
-    } catch {
-      setError("Couldn't send that invite — check the email address, or that email sending is configured (RESEND_API_KEY).");
+    } catch (e) {
+      setError(`Couldn't send that invite: ${errorMessage(e)}`);
       setStatus("error");
     }
   }

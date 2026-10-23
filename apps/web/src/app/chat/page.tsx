@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { api, type EvidenceItem } from "@/lib/api";
+import { api, errorMessage, type EvidenceItem } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
 import { Input, PageHeader, PrimaryButton } from "@/components/ui";
 
@@ -23,8 +23,8 @@ export default function ChatPage() {
       const result = await api.repoChat(repoId, question.trim());
       setExchanges((prev) => [...prev, { question: question.trim(), answer: result.answer, citations: result.citations }]);
       setQuestion("");
-    } catch {
-      setError("Couldn't reach the API — check ANTHROPIC_API_KEY is configured server-side.");
+    } catch (e) {
+      setError(`Couldn't get an answer: ${errorMessage(e)}`);
     } finally {
       setLoading(false);
     }

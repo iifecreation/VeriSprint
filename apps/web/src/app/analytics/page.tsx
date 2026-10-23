@@ -101,7 +101,7 @@ function Panel({ title, enabled, children }: { title: string; enabled: boolean; 
       {enabled ? (
         children
       ) : (
-        <p className="mt-2 text-xs text-[var(--text-dim)]">Not enabled for your workspace — a Super Admin can turn this on from the Operator Console.</p>
+        <p className="mt-2 text-xs text-[var(--text-dim)]">Not included in your current plan — upgrade from Settings → Plan &amp; Billing, or contact us to turn it on.</p>
       )}
     </Card>
   );

@@ -277,6 +277,16 @@ def detect_ticket_drift(ticket_title: str, acceptance_criteria: str, evidence: l
 # Report drafting (sprint rollup / investor update / onboarding doc / client portal)
 # ---------------------------------------------------------------------------
 
+# Appended to every report prompt: the UI shows reports as plain text, and
+# client/investor reports are published as-is (the Client Portal is public),
+# so the output must be the finished document and nothing else.
+_REPORT_OUTPUT_RULES = (
+    " Output only the finished document exactly as the reader will see it. Write plain "
+    "text: no Markdown symbols (no #, *, or ** formatting) — use short headings on their "
+    "own line and simple '-' bullets if needed. Never add notes, caveats, or suggestions "
+    "addressed to the sender or internal team."
+)
+
 REPORT_SYSTEM_PROMPTS = {
     "sprint_rollup": (
         "You write a stakeholder-facing sprint rollup: what actually shipped vs. what was "
@@ -309,7 +319,7 @@ def draft_report(report_type: str, title: str, context: str) -> str:
     if system is None:
         raise ValueError(f"Unknown report_type: {report_type}")
     return _complete_text(
-        system=system,
+        system=system + _REPORT_OUTPUT_RULES,
         user=f"{title}\n\n{context}",
         max_tokens=2048,
     )

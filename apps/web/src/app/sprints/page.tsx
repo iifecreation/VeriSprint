@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Burndown, type DeliveryForecast, type Sprint } from "@/lib/api";
+import { api, errorMessage, type Burndown, type DeliveryForecast, type Sprint } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
 import { Card, EmptyState, Input, LoadingState, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui";
 
@@ -28,6 +28,8 @@ export default function SprintsPage() {
   const [start, setStart] = useState(daysAgoISO(14));
   const [end, setEnd] = useState(todayISO());
   const [ticketKeys, setTicketKeys] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   async function refreshSprints() {
     if (!repoId) return;
@@ -68,18 +70,34 @@ export default function SprintsPage() {
   }
 
   async function handleCreate() {
-    if (!repoId || !name.trim()) return;
-    const sprint = await api.createSprint({
-      repo_id: repoId,
-      name: name.trim(),
-      start_date: `${start}T00:00:00Z`,
-      end_date: `${end}T23:59:59Z`,
-      planned_ticket_keys: ticketKeys.split(",").map((k) => k.trim()).filter(Boolean),
-    });
-    setName("");
-    setTicketKeys("");
-    await refreshSprints();
-    setSelectedSprintId(sprint.id);
+    if (!repoId || !name.trim() || creating) return;
+    if (!start || !end) {
+      setCreateError("Pick a start and end date.");
+      return;
+    }
+    if (end < start) {
+      setCreateError("The end date can't be before the start date.");
+      return;
+    }
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const sprint = await api.createSprint({
+        repo_id: repoId,
+        name: name.trim(),
+        start_date: `${start}T00:00:00Z`,
+        end_date: `${end}T23:59:59Z`,
+        planned_ticket_keys: ticketKeys.split(",").map((k) => k.trim()).filter(Boolean),
+      });
+      setName("");
+      setTicketKeys("");
+      await refreshSprints();
+      setSelectedSprintId(sprint.id);
+    } catch (e) {
+      setCreateError(errorMessage(e));
+    } finally {
+      setCreating(false);
+    }
   }
 
   const maxWeighted = burndown ? Math.max(1, ...burndown.points.map((p) => p.planned_tickets)) : 1;
@@ -105,9 +123,10 @@ export default function SprintsPage() {
           <label className="block text-xs font-semibold text-[var(--text-dim)]">Planned ticket keys (comma-separated)</label>
           <Input className="mt-1.5 w-full" value={ticketKeys} onChange={(e) => setTicketKeys(e.target.value)} placeholder="ENG-1, ENG-2" />
         </div>
-        <PrimaryButton onClick={handleCreate} disabled={!repoId || !name.trim()}>
-          Create sprint
+        <PrimaryButton onClick={handleCreate} disabled={!repoId || !name.trim() || creating}>
+          {creating ? "Creating…" : "Create sprint"}
         </PrimaryButton>
+        {createError && <p className="w-full text-sm text-rose-600">{createError}</p>}
       </Card>
 
       {sprints.length > 0 && (

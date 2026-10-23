@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type OrphanCommit } from "@/lib/api";
+import { api, errorMessage, type OrphanCommit } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
 import { Card, EmptyState, Input, PageHeader, SecondaryButton } from "@/components/ui";
 
@@ -11,6 +11,7 @@ export default function OrphanCommitsPage() {
   const [commits, setCommits] = useState<OrphanCommit[]>([]);
   const [linkInputs, setLinkInputs] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   async function refresh() {
     if (!repoId) return;
@@ -28,8 +29,12 @@ export default function OrphanCommitsPage() {
   async function handleDetect() {
     if (!repoId) return;
     setBusy(true);
+    setNotice(null);
     try {
       await api.detectOrphans(repoId);
+      setNotice({ kind: "ok", text: "Scan started — results appear here in a minute or two. Refresh to check." });
+    } catch (e) {
+      setNotice({ kind: "error", text: errorMessage(e) });
     } finally {
       setBusy(false);
     }
@@ -38,8 +43,13 @@ export default function OrphanCommitsPage() {
   async function handleLink(commitId: string) {
     const key = linkInputs[commitId];
     if (!key?.trim()) return;
-    await api.linkOrphanCommit(commitId, key.trim());
-    await refresh();
+    setNotice(null);
+    try {
+      await api.linkOrphanCommit(commitId, key.trim());
+      await refresh();
+    } catch (e) {
+      setNotice({ kind: "error", text: `Couldn't link that commit: ${errorMessage(e)}` });
+    }
   }
 
   return (
@@ -56,6 +66,10 @@ export default function OrphanCommitsPage() {
           </div>
         }
       />
+
+      {notice && (
+        <p className={`mt-4 text-sm ${notice.kind === "error" ? "text-rose-600" : "text-[var(--text-muted)]"}`}>{notice.text}</p>
+      )}
 
       <div className="mt-8 space-y-3">
         {commits.length === 0 && <EmptyState title="No orphan commits found" body="Or none scanned yet." />}

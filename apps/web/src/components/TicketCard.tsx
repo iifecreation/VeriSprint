@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { api, type ImpactMapEntry, type Ticket } from "@/lib/api";
+import { api, errorMessage, type ImpactMapEntry, type Ticket } from "@/lib/api";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { Card, GhostButton, SecondaryButton } from "./ui";
 
@@ -29,11 +29,16 @@ export function TicketCard({ ticket, onUpdated }: { ticket: Ticket; onUpdated?: 
   const [savingCriteria, setSavingCriteria] = useState(false);
 
   async function handleStatusChange(newStatus: string) {
+    const previous = status;
     setStatus(newStatus);
     setSavingStatus(true);
+    setDriftError(null);
     try {
       const updated = await api.updateTicket(ticket.id, { status: newStatus });
       onUpdated?.(updated);
+    } catch (e) {
+      setStatus(previous); // don't leave the dropdown showing a status that never saved
+      setDriftError(`Couldn't update status: ${errorMessage(e)}`);
     } finally {
       setSavingStatus(false);
     }
@@ -41,7 +46,12 @@ export function TicketCard({ ticket, onUpdated }: { ticket: Ticket; onUpdated?: 
 
   async function toggleImpactMap() {
     if (!impactMapOpen && impactMap === null) {
-      setImpactMap(await api.getImpactMap(ticket.id));
+      try {
+        setImpactMap(await api.getImpactMap(ticket.id));
+      } catch (e) {
+        setDriftError(`Couldn't load the impact map: ${errorMessage(e)}`);
+        return;
+      }
     }
     setImpactMapOpen((open) => !open);
   }
@@ -73,6 +83,8 @@ export function TicketCard({ ticket, onUpdated }: { ticket: Ticket; onUpdated?: 
       onUpdated?.(updated);
       setCriteriaOpen(false);
       setDriftError(null);
+    } catch (e) {
+      setDriftError(`Couldn't save acceptance criteria: ${errorMessage(e)}`);
     } finally {
       setSavingCriteria(false);
     }

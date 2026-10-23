@@ -10,14 +10,15 @@ export const metadata: Metadata = {
   description: "Transparent per-developer pricing: Free forever for one repo, Team and Growth tiers starting around $12–35/developer/month, custom Agency and Enterprise tiers.",
 };
 
-type LivePlan = { tier: string; price_usd: number; billing_interval: string };
+type LivePlan = { tier: string; price_usd: number; billing_interval: string; has_stripe_price?: boolean; has_paystack_plan?: boolean };
 
 async function getLivePlans(): Promise<Record<string, LivePlan>> {
   try {
     const res = await fetch(`${API_BASE_URL}/pricing-plans`, { next: { revalidate: 300 } });
     if (!res.ok) return {};
     const plans: LivePlan[] = await res.json();
-    return Object.fromEntries(plans.map((p) => [p.tier, p]));
+    // Only plans a customer can actually check out count as "live".
+    return Object.fromEntries(plans.filter((p) => p.has_stripe_price || p.has_paystack_plan).map((p) => [p.tier, p]));
   } catch {
     // API unreachable at build/request time — fall back to the static
     // ranges below rather than breaking the page.
@@ -189,7 +190,7 @@ export default async function PricingPage() {
               answer: "Yes. The Free tier has no time limit and doesn't require a credit card — it's the same free standup-summary and single-repo Evidence Ledger whether you're evaluating it for a day or running it for a year.",
             },
             {
-              question: "Do Phase 2/3 features cost extra on top of a tier?",
+              question: "Do advanced features cost extra on top of a tier?",
               answer: "No — every feature listed under a tier is included at that tier's price once your workspace is provisioned. There's no separate metered add-on pricing beyond the named tiers above (Agency and Enterprise are the exception, priced as their own add-ons).",
             },
             {

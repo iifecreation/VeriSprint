@@ -39,7 +39,7 @@ export default function InsightsPage() {
     <div className="mx-auto max-w-5xl px-6 py-10">
       <PageHeader
         title="Insights"
-        subtitle="DORA metrics, code health, risk radar, and team goals — the competitor-parity feature set."
+        subtitle="Delivery speed, code health, delivery risk, and progress against your team goals."
         actions={<RepoPicker selectedRepoId={repoId} onChange={setRepoId} />}
       />
 
@@ -77,7 +77,7 @@ function Panel({ title, enabled, children }: { title: string; enabled: boolean; 
       {enabled ? (
         children
       ) : (
-        <p className="mt-2 text-xs text-[var(--text-dim)]">Not enabled for your workspace — a Super Admin can turn this on from the Operator Console.</p>
+        <p className="mt-2 text-xs text-[var(--text-dim)]">Not included in your current plan — upgrade from Settings → Plan &amp; Billing, or contact us to turn it on.</p>
       )}
     </Card>
   );

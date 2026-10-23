@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type DashboardSummary, type Ticket } from "@/lib/api";
+import { api, errorMessage, type DashboardSummary, type Ticket } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
 import { TicketCard } from "@/components/TicketCard";
 import { Card, EmptyState, Input, LoadingState, PageHeader, PrimaryButton, SecondaryButton, StatCard } from "@/components/ui";
@@ -25,6 +25,7 @@ export default function DashboardPage() {
   const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]>("todo");
   const [assignee, setAssignee] = useState("");
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   async function refresh() {
     if (!repoId) return;
@@ -50,8 +51,9 @@ export default function DashboardPage() {
   }, [repoId]);
 
   async function handleCreate() {
-    if (!repoId || !key.trim() || !title.trim()) return;
+    if (!repoId || !key.trim() || !title.trim() || creating) return;
     setCreating(true);
+    setCreateError(null);
     try {
       await api.createTicket({
         repo_id: repoId,
@@ -66,6 +68,8 @@ export default function DashboardPage() {
       setStatus("todo");
       setFormOpen(false);
       await refresh();
+    } catch (e) {
+      setCreateError(errorMessage(e));
     } finally {
       setCreating(false);
     }
@@ -124,7 +128,8 @@ export default function DashboardPage() {
               <PrimaryButton onClick={handleCreate} disabled={!key.trim() || !title.trim() || creating}>
                 {creating ? "Creating…" : "Create ticket"}
               </PrimaryButton>
-              <SecondaryButton onClick={() => setFormOpen(false)}>Cancel</SecondaryButton>
+              <SecondaryButton onClick={() => { setFormOpen(false); setCreateError(null); }}>Cancel</SecondaryButton>
+              {createError && <p className="w-full text-sm text-rose-600">{createError}</p>}
             </Card>
           )}
         </div>

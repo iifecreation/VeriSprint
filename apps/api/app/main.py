@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.config import get_settings
 from app.db.session import AsyncSessionLocal
@@ -106,11 +107,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_CORS_ORIGINS = [settings.web_base_url, settings.admin_base_url, settings.marketing_base_url]
+
 app.add_middleware(
     CORSMiddleware,
     # Three separate frontend deploys (product app, operator console,
     # marketing site) each need to call this API from their own origin.
-    allow_origins=[settings.web_base_url, settings.admin_base_url, settings.marketing_base_url],
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -138,6 +141,30 @@ async def security_headers(request: Request, call_next):
     return response
 
 
+def _with_cors(request: Request, response: JSONResponse) -> JSONResponse:
+    # Starlette runs app-level exception handlers outside CORSMiddleware, so
+    # without these headers the browser hides the response body and the
+    # frontend only sees an opaque "Failed to fetch".
+    origin = request.headers.get("origin")
+    if origin in _CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+    return response
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    """A unique/foreign-key constraint tripped (e.g. a duplicate name) — that's
+    a conflict with existing data the user can fix, not a server crash."""
+    logger.info("Integrity error on %s %s: %s", request.method, request.url.path, exc.orig)
+    if "unique" in str(exc.orig).lower() or "duplicate" in str(exc.orig).lower():
+        detail = "Something with that name or key already exists."
+    else:
+        detail = "That change conflicts with existing data."
+    return _with_cors(request, JSONResponse(status_code=409, content={"detail": detail}))
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catches only genuinely unhandled exceptions — FastAPI/Starlette already
@@ -151,7 +178,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         message=f"{request.method} {request.url.path}: {exc}",
         stack_ref=error_id,
     )
-    return JSONResponse(status_code=500, content={"detail": "Internal server error", "error_id": error_id})
+    response = JSONResponse(status_code=500, content={"detail": "Something went wrong on our side. Please try again.", "error_id": error_id})
+    return _with_cors(request, response)
 
 app.include_router(auth.router)
 app.include_router(admin.router)

@@ -1,9 +1,10 @@
 """Pydantic (API) schemas — request/response shapes, kept separate from ORM models."""
+import re
 import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 class RepoOut(BaseModel):
@@ -126,10 +127,16 @@ class TicketUpdate(BaseModel):
 
 class SprintCreate(BaseModel):
     repo_id: uuid.UUID
-    name: str
+    name: str = Field(min_length=1, max_length=255)
     start_date: datetime
     end_date: datetime
     planned_ticket_keys: list[str] = []
+
+    @model_validator(mode="after")
+    def _end_after_start(self) -> "SprintCreate":
+        if self.end_date < self.start_date:
+            raise ValueError("end_date can't be before start_date")
+        return self
 
 
 class SprintOut(BaseModel):
@@ -282,10 +289,26 @@ class PublicPortalReportOut(BaseModel):
 
 
 class WorkspaceSettingsUpdate(BaseModel):
-    name: str | None = None
-    logo_url: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    logo_url: str | None = Field(default=None, max_length=1024)
     primary_color_hex: str | None = None
-    avg_standup_minutes: int | None = None
+    avg_standup_minutes: int | None = Field(default=None, ge=1, le=240)
+    hourly_rate_usd: float | None = Field(default=None, ge=0, le=10000)
+
+    @field_validator("logo_url")
+    @classmethod
+    def _http_logo(cls, v: str | None) -> str | None:
+        # Shown on the public Client Portal, so only real http(s) image URLs.
+        if v and not re.match(r"^https?://\S+$", v):
+            raise ValueError("must be a full http:// or https:// image URL")
+        return v or None
+
+    @field_validator("primary_color_hex")
+    @classmethod
+    def _hex_color(cls, v: str | None) -> str | None:
+        if v is not None and not re.match(r"^#[0-9a-fA-F]{6}$", v):
+            raise ValueError("must be a hex color like #0EA5E9")
+        return v
 
 
 # --- Auth (spec Section 6) ---------------------------------------------------
@@ -759,6 +782,9 @@ CONTACT_REASONS = {"enterprise", "security", "bug_report", "other"}
 
 
 class ContactMessageCreate(BaseModel):
+    # Strip first so a name/message of only spaces fails min_length.
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     name: str = Field(min_length=1, max_length=255)
     email: EmailStr
     reason: str = "other"

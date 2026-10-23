@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Repo } from "@/lib/api";
+import { api, errorMessage, type Repo } from "@/lib/api";
 
 export function RepoPicker({
   selectedRepoId,
@@ -10,7 +10,7 @@ export function RepoPicker({
   selectedRepoId: string | null;
   onChange: (repoId: string) => void;
 }) {
-  const [repos, setRepos] = useState<Repo[]>([]);
+  const [repos, setRepos] = useState<Repo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -20,12 +20,16 @@ export function RepoPicker({
         setRepos(data);
         if (!selectedRepoId && data.length > 0) onChange(data[0].id);
       })
-      .catch(() => setError("Couldn't reach the API — is it running on NEXT_PUBLIC_API_BASE_URL?"));
+      .catch((e) => setError(`Couldn't load your repos: ${errorMessage(e)}`));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (error) {
     return <p className="text-sm text-rose-600">{error}</p>;
+  }
+
+  if (repos === null) {
+    return <p className="text-sm text-[var(--text-dim)]">Loading repos…</p>;
   }
 
   if (repos.length === 0) {

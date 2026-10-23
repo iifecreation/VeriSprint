@@ -53,7 +53,7 @@ export default function PublicPortalPage({ params }: { params: Promise<{ token: 
           <h1 className="text-2xl font-bold text-[var(--foreground)]">{report.title}</h1>
           {report.period_start && report.period_end && (
             <p className="mt-1.5 text-sm text-[var(--text-dim)]">
-              {new Date(report.period_start).toLocaleDateString()} – {new Date(report.period_end).toLocaleDateString()}
+              {new Date(report.period_start).toLocaleDateString(undefined, { timeZone: "UTC" })} – {new Date(report.period_end).toLocaleDateString(undefined, { timeZone: "UTC" })}
             </p>
           )}
 

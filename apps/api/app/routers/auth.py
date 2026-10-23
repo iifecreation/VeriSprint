@@ -256,7 +256,10 @@ async def invite_user(
             text=f"{inviter.name or inviter.github_login or inviter.email} invited you to their VeriSprint workspace.\n\nAccept: {invite_url}\n\nThis link expires in 7 days.",
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Invite email failed to send: %s", exc)
+        raise HTTPException(
+            status_code=503, detail="Email sending isn't set up yet, so the invite couldn't be sent. Please contact support."
+        ) from exc
     await record_audit_for_user(
         db, user=inviter, action="user.invited", entity_type="user", entity_id=str(invitee.id),
         after={"email": payload.email, "role": role.value},

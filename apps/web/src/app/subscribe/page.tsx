@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type PricingPlan, type Subscription } from "@/lib/api";
+import Link from "next/link";
+import { api, errorMessage, type PricingPlan, type Subscription } from "@/lib/api";
 import { logout } from "@/lib/auth";
 import { Badge, Card, PrimaryButton, SecondaryButton } from "@/components/ui";
 
@@ -38,12 +39,14 @@ export default function SubscribePage() {
       });
       window.location.href = checkout_url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't start checkout — try again in a moment.");
+      setError(errorMessage(e, "Couldn't start checkout — try again in a moment."));
       setBusyTier(null);
     }
   }
 
   const trialEnded = sub && !sub.has_active_access;
+  // Only offer plans that can actually be bought with the selected provider.
+  const purchasable = plans.filter((p) => (provider === "stripe" ? p.has_stripe_price : p.has_paystack_plan));
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-sky-gradient">
@@ -78,9 +81,9 @@ export default function SubscribePage() {
           </button>
         </div>
 
-        {plans.length > 0 ? (
+        {purchasable.length > 0 ? (
           <div className="mt-8 grid w-full gap-4 sm:grid-cols-2">
-            {plans.map((p) => (
+            {purchasable.map((p) => (
               <Card key={p.tier} className="flex flex-col">
                 <p className="font-semibold text-[var(--foreground)]">{p.name || TIER_LABEL[p.tier]}</p>
                 <p className="mt-2 text-3xl font-bold text-[var(--foreground)]">
@@ -96,8 +99,9 @@ export default function SubscribePage() {
         ) : (
           <Card className="mt-8 w-full text-center">
             <p className="text-[var(--text-muted)]">
-              Plans aren&apos;t configured yet on this deployment. Contact the workspace owner, or an operator can set live
-              prices from the Operator Console&apos;s Pricing panel.
+              Online checkout isn&apos;t open yet. Email{" "}
+              <a href="mailto:hello@verisprint.dev" className="underline underline-offset-2">hello@verisprint.dev</a>{" "}
+              and we&apos;ll set up your plan directly.
             </p>
           </Card>
         )}
@@ -106,6 +110,11 @@ export default function SubscribePage() {
 
         <div className="mt-8 flex items-center gap-3 text-sm">
           {sub && <Badge tone={sub.has_active_access ? "success" : "warning"}>{sub.has_active_access ? "Access active" : "Access paused"}</Badge>}
+          {sub?.has_active_access && (
+            <Link href="/dashboard" className="text-sm font-semibold text-[var(--text-muted)] underline underline-offset-2 hover:text-[var(--foreground)]">
+              Back to dashboard
+            </Link>
+          )}
           <SecondaryButton onClick={() => logout()}>Log out</SecondaryButton>
         </div>
       </div>

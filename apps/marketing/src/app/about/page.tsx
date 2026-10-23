@@ -46,8 +46,8 @@ export default function AboutPage() {
             </p>
 
             <p className="mt-10 border-t border-[var(--line)] pt-10 text-[var(--text-muted)]">
-              We&apos;re early — a small, independent project rather than a large company, and still adding the Phase 2
-              and Phase 3 features on our roadmap. If a page here ever claims a capability that doesn&apos;t
+              We&apos;re early — a small, independent project rather than a large company, and still
+              actively building. If a page here ever claims a capability that doesn&apos;t
               work as described, we&apos;d genuinely like to hear about it.
             </p>
             <div className="mt-10 rounded-2xl bg-[var(--background)] p-6 border border-[var(--line)] text-center">
