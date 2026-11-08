@@ -1,0 +1,55 @@
+# Reverse proxy for the four public hostnames. Cloudflare terminates the
+# visitor's HTTPS and connects here using a Cloudflare Origin Certificate
+# (deploy/certs/origin.pem + origin-key.pem, SSL mode "Full (strict)").
+# See deploy/DEPLOY.md, step 4.
+
+{
+	# We use Cloudflare's origin certificate, not Let's Encrypt.
+	auto_https disable_certs
+	admin off
+}
+
+(common) {
+	tls /certs/origin.pem /certs/origin-key.pem
+	encode zstd gzip
+	header -Server
+	header -X-Powered-By
+	# Cloudflare sends the visitor's IP in CF-Connecting-IP. Pass it on as
+	# the only X-Forwarded-For entry so rate limits see the real visitor and
+	# a client can't inject fake IPs.
+	request_header X-Forwarded-For {http.request.header.CF-Connecting-IP}
+}
+
+{$DOMAIN}, www.{$DOMAIN} {
+	import common
+	@www host www.{$DOMAIN}
+	redir @www https://{$DOMAIN}{uri} permanent
+	reverse_proxy marketing:3000
+}
+
+app.{$DOMAIN} {
+	import common
+	reverse_proxy web:3000
+}
+
+admin.{$DOMAIN} {
+	import common
+	reverse_proxy admin:3000
+}
+
+api.{$DOMAIN} {
+	import common
+	reverse_proxy api:8000 {
+		header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+	}
+}
+
+# Anything else (e.g. someone hitting the server's raw IP) gets nothing.
+:443 {
+	tls /certs/origin.pem /certs/origin-key.pem
+	respond 404
+}
+
+:80 {
+	respond 404
+}

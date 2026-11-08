@@ -143,6 +143,13 @@ test accounts below). This is where FeatureFlags get toggled, contact-form
 messages and errors get triaged, and cross-tenant workspace/billing state
 lives.
 
+## Deploying to production
+
+See **[deploy/DEPLOY.md](deploy/DEPLOY.md)** for a step-by-step guide to
+running the whole stack for $0/month on one Oracle Cloud Always Free server
+behind Cloudflare (`deploy/docker-compose.prod.yml`, Caddy, server hardening
+and backup scripts included).
+
 ## Auth & RBAC (v3)
 
 Five roles, enforced server-side on every request via a JWT-embedded

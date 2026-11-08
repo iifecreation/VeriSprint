@@ -37,6 +37,8 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   // Don't advertise the framework/version to attackers.
   poweredByHeader: false,
+  // Self-contained server bundle for the Docker image (deploy/).
+  output: "standalone",
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

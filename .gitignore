@@ -28,3 +28,7 @@ apps/api/.local_object_storage/
 # Editors
 .vscode/
 .idea/
+
+# Deployment secrets and data (deploy/)
+deploy/certs/
+deploy/backups/
