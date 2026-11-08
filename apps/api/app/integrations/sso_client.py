@@ -24,6 +24,8 @@ from functools import lru_cache
 from uuid import UUID
 
 import httpx
+
+from app.hardening import assert_public_https_url
 import jwt
 from jwt import PyJWKClient
 from sqlalchemy import select
@@ -80,7 +82,9 @@ async def resolve_oidc_config(db: AsyncSession, *, workspace_account_login: str 
 def _discover(issuer: str) -> dict:
     """Fetch and cache the IdP's OIDC discovery document, keyed by issuer so
     multiple per-workspace IdPs don't collide in the cache."""
-    resp = httpx.get(f"{issuer.rstrip('/')}/.well-known/openid-configuration", timeout=10)
+    # Issuers can be customer-supplied: only fetch public https hosts (SSRF guard).
+    assert_public_https_url(issuer)
+    resp = httpx.get(f"{issuer.rstrip('/')}/.well-known/openid-configuration", timeout=10, follow_redirects=False)
     resp.raise_for_status()
     return resp.json()
 
@@ -110,6 +114,7 @@ def build_authorize_url(config: OIDCConfig, state: str, code_challenge: str) -> 
 def exchange_code_for_claims(config: OIDCConfig, code: str, code_verifier: str) -> dict:
     """Exchange an authorization code for tokens, verify the id_token, and return its claims."""
     doc = _discover(config.issuer)
+    assert_public_https_url(doc["token_endpoint"])
     resp = httpx.post(
         doc["token_endpoint"],
         data={
@@ -125,6 +130,7 @@ def exchange_code_for_claims(config: OIDCConfig, code: str, code_verifier: str) 
     resp.raise_for_status()
     id_token = resp.json()["id_token"]
 
+    assert_public_https_url(doc["jwks_uri"])
     jwk_client = PyJWKClient(doc["jwks_uri"])
     signing_key = jwk_client.get_signing_key_from_jwt(id_token)
     claims = jwt.decode(

@@ -38,7 +38,20 @@ export function ContactForm({ defaultReason = "other" }: { defaultReason?: (type
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Something went wrong sending that — try again in a moment.");
+        // FastAPI validation errors come back as a list of {loc, msg}.
+        const detail = Array.isArray(body.detail)
+          ? body.detail
+              .map((d: { loc?: unknown[]; msg?: string }) => {
+                const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : "";
+                return `${typeof field === "string" && field !== "body" ? `${field}: ` : ""}${(d.msg ?? "is invalid").replace(/^Value error, /, "")}`;
+              })
+              .join("; ")
+          : body.detail;
+        throw new Error(
+          res.status === 429
+            ? "You've sent a few messages already — please wait a bit and try again, or email us directly."
+            : detail || "Something went wrong sending that — try again in a moment.",
+        );
       }
       setStatus("sent");
       setName("");
@@ -53,13 +66,13 @@ export function ContactForm({ defaultReason = "other" }: { defaultReason?: (type
   if (status === "sent") {
     return (
       <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/15 p-8 text-center">
-        <p className="text-lg font-bold text-emerald-900">Message sent.</p>
+        <p className="text-lg font-bold text-emerald-300">Message sent.</p>
         <p className="mt-2 text-sm text-emerald-400">
           We read every one of these ourselves — expect a reply at the email you gave us, usually within a day.
         </p>
         <button
           onClick={() => setStatus("idle")}
-          className="mt-4 text-sm font-semibold text-emerald-400 underline hover:text-emerald-900"
+          className="mt-4 text-sm font-semibold text-emerald-400 underline hover:text-emerald-300"
         >
           Send another message
         </button>

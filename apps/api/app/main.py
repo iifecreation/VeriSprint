@@ -9,8 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import DataError, IntegrityError
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import get_settings
+from app.hardening import BodySizeLimitMiddleware, allowed_hosts, apply_security_headers, check_production_config
 from app.db.session import AsyncSessionLocal
 from app.mcp_server import mcp_app
 from app.observability import record_error
@@ -59,6 +62,8 @@ from app.routers import (
 )
 
 settings = get_settings()
+# Refuse to boot a production process with default/weak secrets.
+check_production_config(settings)
 
 # One-line-per-record format with a timestamp — not full structured JSON, but
 # enough for any log aggregator (CloudWatch, Datadog, etc.) to parse a level
@@ -104,13 +109,19 @@ app = FastAPI(
     ),
     version="0.1.0",
     lifespan=lifespan,
+    # Interactive API docs are a map of every endpoint — dev only.
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
+    openapi_url=None if settings.is_production else "/openapi.json",
 )
+
+_CORS_ORIGINS = [settings.web_base_url, settings.admin_base_url, settings.marketing_base_url]
 
 app.add_middleware(
     CORSMiddleware,
     # Three separate frontend deploys (product app, operator console,
     # marketing site) each need to call this API from their own origin.
-    allow_origins=[settings.web_base_url, settings.admin_base_url, settings.marketing_base_url],
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -124,18 +135,49 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    """Baseline headers every response should carry — this is a JSON API with
-    no cookie-based auth (bearer tokens only, see app/auth/), so there's no
-    CSRF surface here, but these still matter: `nosniff` and the frame/referrer
-    policy protect against this API's responses ever being misused if a
-    browser is tricked into rendering or embedding one directly."""
+    """Strict headers on every response — see app/hardening.py."""
     response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    if settings.env == "production":
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    apply_security_headers(request.url.path, response.headers, settings.is_production)
     return response
+
+
+# Outermost layers (added last): reject oversized bodies and, in
+# production, requests for any Host other than our own.
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_bytes)
+if settings.is_production:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts(settings))
+
+
+def _with_cors(request: Request, response: JSONResponse) -> JSONResponse:
+    # Starlette runs app-level exception handlers outside CORSMiddleware, so
+    # without these headers the browser hides the response body and the
+    # frontend only sees an opaque "Failed to fetch".
+    origin = request.headers.get("origin")
+    if origin in _CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+    return response
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    """A unique/foreign-key constraint tripped (e.g. a duplicate name) — that's
+    a conflict with existing data the user can fix, not a server crash."""
+    logger.info("Integrity error on %s %s: %s", request.method, request.url.path, exc.orig)
+    if "unique" in str(exc.orig).lower() or "duplicate" in str(exc.orig).lower():
+        detail = "Something with that name or key already exists."
+    else:
+        detail = "That change conflicts with existing data."
+    return _with_cors(request, JSONResponse(status_code=409, content={"detail": detail}))
+
+
+@app.exception_handler(DataError)
+async def data_error_handler(request: Request, exc: DataError) -> JSONResponse:
+    """A value the database rejected (usually too long for its column) —
+    the caller's input problem, not a server crash."""
+    logger.info("Data error on %s %s: %s", request.method, request.url.path, exc.orig)
+    return _with_cors(request, JSONResponse(status_code=422, content={"detail": "One of the values is too long or invalid."}))
 
 
 @app.exception_handler(Exception)
@@ -151,7 +193,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         message=f"{request.method} {request.url.path}: {exc}",
         stack_ref=error_id,
     )
-    return JSONResponse(status_code=500, content={"detail": "Internal server error", "error_id": error_id})
+    response = JSONResponse(status_code=500, content={"detail": "Something went wrong on our side. Please try again.", "error_id": error_id})
+    return _with_cors(request, response)
 
 app.include_router(auth.router)
 app.include_router(admin.router)

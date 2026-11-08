@@ -4,6 +4,8 @@ EvidenceItems, answered by the configured LLM provider with citations. Every
 interaction is logged to ChatQuery for auditability (spec Section 8).
 """
 from fastapi import APIRouter, Depends, HTTPException
+
+from app.auth.rate_limit import per_user_limit
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +19,7 @@ from app.billing_access import require_active_access
 router = APIRouter(prefix="/chat", tags=["chat"], dependencies=[Depends(require_active_access)])
 
 
-@router.post("", response_model=RepoChatAnswer)
+@router.post("", response_model=RepoChatAnswer, dependencies=[Depends(per_user_limit("chat", 30, 600))])
 async def repo_chat(
     query: RepoChatQuery, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
 ) -> RepoChatAnswer:

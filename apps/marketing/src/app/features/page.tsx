@@ -293,8 +293,8 @@ export default function FeaturesPage() {
                 answer: "No. Team Intelligence, Risk & Automation (beyond the drift/orphan detectors), Team Health, and Enterprise features sit behind per-workspace feature flags, off by default — a Workspace Admin turns each one on individually as it's needed.",
               },
               {
-                question: "Which of these work without a paid plan?",
-                answer: "The Free tier includes the full Verification Engine (Evidence Ledger, Confidence Score, Claimed vs. Shipped), auto-drafted standups, and the Client Proof-of-Work Portal for one repo, indefinitely. See Pricing for what each paid tier unlocks.",
+                question: "Which of these can I try for free?",
+                answer: "The 30-day free trial includes the full Verification Engine (Evidence Ledger, Confidence Score, Claimed vs. Shipped), auto-drafted standups, and the Client Proof-of-Work Portal. See Pricing for what each paid tier unlocks.",
               },
               {
                 question: "Is the Delivery Forecast a trained ML model?",
@@ -312,7 +312,7 @@ export default function FeaturesPage() {
       <Section variant="default" className="bg-[var(--background)] border-t border-[var(--line)]">
         <Reveal className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold text-[var(--foreground)] tracking-tight">See it against your own commits</h2>
-          <p className="mt-4 text-[var(--text-muted)] text-lg">Connect a repo — the Free tier has no time limit and no credit card.</p>
+          <p className="mt-4 text-[var(--text-muted)] text-lg">Connect a repo — 30 days free, no credit card.</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Link href={INSTALL_URL} className="inline-block">
               <ShimmerButton background="#4fb8c4" className="text-lg px-8 py-2">Connect a GitHub repo</ShimmerButton>

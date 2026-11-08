@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type AuditLogEntry } from "@/lib/api";
+import { api, errorMessage, type AuditLogEntry } from "@/lib/api";
 import { RepoPicker } from "@/components/RepoPicker";
 import { Card, EmptyState, PageHeader, SecondaryButton } from "@/components/ui";
 
@@ -9,6 +9,8 @@ import { Card, EmptyState, PageHeader, SecondaryButton } from "@/components/ui";
 export default function AuditPage() {
   const [repoId, setRepoId] = useState<string | null>(null);
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (repoId) api.listAuditLog(repoId).then(setEntries);
@@ -22,10 +24,29 @@ export default function AuditPage() {
         actions={
           <div className="flex items-center gap-2">
             <RepoPicker selectedRepoId={repoId} onChange={setRepoId} />
-            {repoId && <SecondaryButton href={api.auditExportUrl(repoId)}>Export CSV</SecondaryButton>}
+            {repoId && (
+              <SecondaryButton
+                disabled={exporting}
+                onClick={async () => {
+                  setExporting(true);
+                  setExportError(null);
+                  try {
+                    await api.downloadAuditExport(repoId);
+                  } catch (e) {
+                    setExportError(`Export failed: ${errorMessage(e)}`);
+                  } finally {
+                    setExporting(false);
+                  }
+                }}
+              >
+                {exporting ? "Exporting…" : "Export CSV"}
+              </SecondaryButton>
+            )}
           </div>
         }
       />
+
+      {exportError && <p className="mt-4 text-sm text-rose-600">{exportError}</p>}
 
       <div className="mt-8 space-y-2">
         {entries.map((e) => (

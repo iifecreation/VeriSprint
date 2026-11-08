@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "./config";
-import { clearTokens, getAccessToken, getRefreshToken, refreshAccessToken } from "./auth";
+import { clearTokens, getAccessToken, getRefreshToken, redirectToLogin, refreshAccessToken } from "./auth";
 
 export type Repo = {
   id: string;
@@ -530,6 +530,52 @@ export type AIToolCostReport = {
   method_note: string;
 };
 
+/** Thrown for any non-2xx API response. `message` is always safe to show a
+ * user: FastAPI's `detail` (a string, or a list of validation errors) is
+ * flattened into one readable sentence instead of raw JSON. */
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+async function toApiError(res: Response): Promise<ApiError> {
+  let message = "";
+  try {
+    const body = await res.json();
+    const detail = body?.detail;
+    if (typeof detail === "string") {
+      message = detail;
+    } else if (Array.isArray(detail)) {
+      message = detail
+        .map((d: { loc?: unknown[]; msg?: string }) => {
+          const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : null;
+          const msg = (d.msg ?? "is invalid").replace(/^Value error, /, "");
+          return typeof field === "string" && field !== "body" ? `${field.replace(/_/g, " ")}: ${msg}` : msg;
+        })
+        .join("; ");
+    }
+  } catch {
+    // non-JSON body — fall through to a status-based message
+  }
+  if (!message) {
+    if (res.status === 429) message = "Too many attempts — please wait a few minutes and try again.";
+    else if (res.status >= 500) message = "Something went wrong on our side. Please try again.";
+    else message = `Request failed (${res.status}).`;
+  }
+  return new ApiError(res.status, message);
+}
+
+/** Turns anything caught from an `api.*` call into a message for the UI. */
+export function errorMessage(e: unknown, fallback = "Something went wrong — please try again."): string {
+  if (e instanceof ApiError) return e.message;
+  if (e instanceof TypeError) return "Couldn't reach VeriSprint — check your connection and try again.";
+  return fallback;
+}
+
 async function doFetch(path: string, init: RequestInit | undefined, accessToken: string | null): Promise<Response> {
   return fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -548,7 +594,7 @@ async function doFetch(path: string, init: RequestInit | undefined, accessToken:
 async function apiFetchNoAuth<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await doFetch(path, init, null);
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status} ${await res.text()}`);
+    throw await toApiError(res);
   }
   return res.json() as Promise<T>;
 }
@@ -559,10 +605,13 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const newToken = await refreshAccessToken();
     if (newToken) {
       res = await doFetch(path, init, newToken);
-    } else if (typeof window !== "undefined") {
-      clearTokens();
-      window.location.href = "/login";
     }
+  }
+  // Still unauthorized (no session, or the refresh token was revoked) — send
+  // the user to sign in rather than leaving a page full of failed requests.
+  if (res.status === 401 && typeof window !== "undefined") {
+    clearTokens();
+    redirectToLogin();
   }
   // 402 = the workspace's trial ended and it isn't on a paid plan (see
   // app/billing_access.py) — handled globally here, not per-page, so no
@@ -573,7 +622,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     window.location.href = "/subscribe";
   }
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status} ${await res.text()}`);
+    throw await toApiError(res);
   }
   return res.json() as Promise<T>;
 }
@@ -657,7 +706,22 @@ export const api = {
   listWorkUnits: (workspaceId: string) => apiFetch<LogicalWorkUnit[]>(`/work-units?workspace_id=${workspaceId}`),
 
   listAuditLog: (repoId: string) => apiFetch<AuditLogEntry[]>(`/audit?repo_id=${repoId}`),
-  auditExportUrl: (repoId: string) => `${API_BASE_URL}/audit/export?repo_id=${repoId}`,
+  /** Fetches the CSV with the user's token and hands it to the browser as a
+   * download — a plain link can't carry the Authorization header. */
+  downloadAuditExport: async (repoId: string) => {
+    let res = await doFetch(`/audit/export?repo_id=${repoId}`, undefined, getAccessToken());
+    if (res.status === 401 && getRefreshToken()) {
+      const newToken = await refreshAccessToken();
+      if (newToken) res = await doFetch(`/audit/export?repo_id=${repoId}`, undefined, newToken);
+    }
+    if (!res.ok) throw await toApiError(res);
+    const url = URL.createObjectURL(await res.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `verisprint-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  },
 
   getSettings: (workspaceId: string) => apiFetch<WorkspaceSettings>(`/settings?workspace_id=${workspaceId}`),
   updateSettings: (

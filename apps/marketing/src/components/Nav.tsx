@@ -25,16 +25,38 @@ export function Nav() {
             </Link>
           ))}
         </nav>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <a href={LOGIN_URL} className="hidden text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--foreground)] transition-colors sm:block">
             Sign in
           </a>
           <Link
             href="/pricing"
-            className="rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-[#04201f] transition-all hover:opacity-90 hover:scale-105 shadow-sm"
+            className="rounded-full bg-brand px-4 py-2.5 sm:px-6 text-sm font-bold text-[#04201f] transition-all hover:opacity-90 hover:scale-105 shadow-sm"
           >
             Start free
           </Link>
+          {/* Phones/tablets: the links above are hidden, so offer them in a
+              menu. <details> keeps this a server component with no JS. */}
+          <details className="group relative md:hidden">
+            <summary
+              aria-label="Open menu"
+              className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full border border-[var(--line-strong)] text-[var(--foreground)] [&::-webkit-details-marker]:hidden"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden>
+                <path fillRule="evenodd" d="M3 5h14a1 1 0 010 2H3a1 1 0 010-2zm0 4h14a1 1 0 010 2H3a1 1 0 010-2zm0 4h14a1 1 0 010 2H3a1 1 0 010-2z" clipRule="evenodd" />
+              </svg>
+            </summary>
+            <nav className="absolute right-0 mt-3 w-56 rounded-2xl border border-[var(--line-strong)] bg-[var(--surface)] p-2 shadow-xl">
+              {LINKS.map((link) => (
+                <Link key={link.href} href={link.href} className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--background)] hover:text-[var(--foreground)]">
+                  {link.label}
+                </Link>
+              ))}
+              <a href={LOGIN_URL} className="mt-1 block rounded-lg border-t border-[var(--line)] px-3 py-2.5 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--background)]">
+                Sign in
+              </a>
+            </nav>
+          </details>
         </div>
       </div>
     </header>

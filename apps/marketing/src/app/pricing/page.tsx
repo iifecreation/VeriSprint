@@ -7,17 +7,18 @@ import { HeroBackground } from "@/components/HeroBackground";
 
 export const metadata: Metadata = {
   title: "Pricing — VeriSprint",
-  description: "Transparent per-developer pricing: Free forever for one repo, Team and Growth tiers starting around $12–35/developer/month, custom Agency and Enterprise tiers.",
+  description: "Transparent per-developer pricing: a 30-day free trial with no card required, Team and Growth tiers starting around $12–35/developer/month, custom Agency and Enterprise tiers.",
 };
 
-type LivePlan = { tier: string; price_usd: number; billing_interval: string };
+type LivePlan = { tier: string; price_usd: number; billing_interval: string; has_stripe_price?: boolean; has_paystack_plan?: boolean };
 
 async function getLivePlans(): Promise<Record<string, LivePlan>> {
   try {
     const res = await fetch(`${API_BASE_URL}/pricing-plans`, { next: { revalidate: 300 } });
     if (!res.ok) return {};
     const plans: LivePlan[] = await res.json();
-    return Object.fromEntries(plans.map((p) => [p.tier, p]));
+    // Only plans a customer can actually check out count as "live".
+    return Object.fromEntries(plans.filter((p) => p.has_stripe_price || p.has_paystack_plan).map((p) => [p.tier, p]));
   } catch {
     // API unreachable at build/request time — fall back to the static
     // ranges below rather than breaking the page.
@@ -39,13 +40,12 @@ type Tier = {
 const TIERS: Tier[] = [
   {
     key: "free",
-    name: "Free",
+    name: "Free trial",
     fallbackPrice: "$0",
-    fallbackNote: "Forever — no card required",
-    description: "One repo, the core Evidence Ledger and Confidence Score pipeline — no time limit.",
-    fallbackCta: { label: "Connect a repo", href: INSTALL_URL },
+    fallbackNote: "for 30 days — no card required",
+    description: "Try the core Evidence Ledger and Confidence Score pipeline on your own repos, then pick a plan.",
+    fallbackCta: { label: "Start free trial", href: INSTALL_URL },
     features: [
-      "1 connected repo",
       "Evidence Ledger + Confidence Scores",
       "Claimed vs. shipped reconciliation",
       "Auto-drafted standups",
@@ -59,7 +59,7 @@ const TIERS: Tier[] = [
     fallbackNote: "per developer / month",
     description: "For a single team shipping across a few repos.",
     fallbackCta: { label: "Contact us", href: `mailto:${CONTACT_EMAIL}?subject=VeriSprint Team plan` },
-    features: ["Everything in Free", "Multiple repos", "Sprint rollups & burndown", "Historical accuracy", "Slack digests", "DORA metrics panel"],
+    features: ["Everything in the free trial", "Multiple repos", "Sprint rollups & burndown", "Historical accuracy", "Slack digests", "DORA metrics panel"],
   },
   {
     key: "growth",
@@ -110,11 +110,11 @@ export default async function PricingPage() {
         background={<HeroBackground />}
       >
         <PageHeader
-          title="Start free. Upgrade when you need more repos or reporting."
+          title="Try it free for 30 days. Then pick the plan that fits."
           subtitle={
             anyLive
-              ? "The Free tier has no time limit and no credit card required. Team and Growth are self-serve — connect a repo, then subscribe from Settings whenever you're ready."
-              : "The Free tier has no time limit and no credit card required. We're in early access, so paid tiers are confirmed directly with our team at launch — the ranges below are our stated pricing direction, not a placeholder."
+              ? "Every new workspace starts with a 30-day free trial — no credit card required. Team and Growth are self-serve: connect a repo, then subscribe from Settings before your trial ends."
+              : "Every new workspace starts with a 30-day free trial — no credit card required. We're in early access, so paid tiers are confirmed directly with our team at launch — the ranges below are our stated pricing direction, not a placeholder."
           }
         />
       </Section>
@@ -185,11 +185,11 @@ export default async function PricingPage() {
               answer: "Anyone with a Developer, Manager, or Workspace Admin role in a workspace. The read-only Client Portal role — used for external clients checking a proof-of-work link — is never counted as a seat.",
             },
             {
-              question: "Can I stay on Free indefinitely?",
-              answer: "Yes. The Free tier has no time limit and doesn't require a credit card — it's the same free standup-summary and single-repo Evidence Ledger whether you're evaluating it for a day or running it for a year.",
+              question: "What happens when my free trial ends?",
+              answer: "You'll be asked to choose a plan to keep using VeriSprint. Nothing is deleted — your Evidence Ledger, reports, and settings are all still there the moment you subscribe. We never charge you automatically, since the trial doesn't take a card.",
             },
             {
-              question: "Do Phase 2/3 features cost extra on top of a tier?",
+              question: "Do advanced features cost extra on top of a tier?",
               answer: "No — every feature listed under a tier is included at that tier's price once your workspace is provisioned. There's no separate metered add-on pricing beyond the named tiers above (Agency and Enterprise are the exception, priced as their own add-ons).",
             },
             {

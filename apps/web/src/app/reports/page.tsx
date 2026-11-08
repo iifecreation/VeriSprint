@@ -147,7 +147,7 @@ export default function ReportsPage() {
             </div>
             {r.status === "ready" && <p className="mt-3 whitespace-pre-wrap text-sm text-[var(--text-muted)]">{r.summary_text}</p>}
             {r.status === "failed" && (
-              <p className="mt-3 text-sm text-rose-600">Generation failed — check the worker logs (likely a missing ANTHROPIC_API_KEY).</p>
+              <p className="mt-3 text-sm text-rose-600">Generation failed — try again in a few minutes, or contact us if it keeps happening.</p>
             )}
           </Card>
         ))}

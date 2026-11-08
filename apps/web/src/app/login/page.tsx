@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL, api } from "@/lib/api";
-import { storeTokens } from "@/lib/auth";
+import { API_BASE_URL, ApiError, api, errorMessage } from "@/lib/api";
+import { safeNextPath, storeTokens } from "@/lib/auth";
 import { ADMIN_APP_URL } from "@/lib/config";
 import { Input, PrimaryButton } from "@/components/ui";
 
@@ -17,6 +17,20 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Redirect-based sign-in paths (SSO) come back here with ?error=...
+  useEffect(() => {
+    queueMicrotask(() => {
+      const messages: Record<string, string> = {
+        sso_not_configured: "Single sign-on isn't set up for your workspace. Sign in with email or GitHub, or ask your admin.",
+        sso_failed: "We couldn't reach your company's sign-in provider. Try again, or ask your admin.",
+        oauth_state: "That GitHub sign-in link expired or didn't start here. Please try again.",
+        oauth_failed: "GitHub sign-in didn't complete. Please try again.",
+      };
+      const code = new URLSearchParams(window.location.search).get("error");
+      if (code && messages[code]) setError(messages[code]);
+    });
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -29,9 +43,11 @@ export default function LoginPage() {
         window.location.href = ADMIN_APP_URL;
         return;
       }
-      router.push("/dashboard");
-    } catch {
-      setError("Invalid email or password.");
+      router.push(safeNextPath(new URLSearchParams(window.location.search).get("next")));
+    } catch (e) {
+      // 401 = wrong credentials; anything else (rate limit, network, server
+      // error) gets its own message instead of blaming the password.
+      setError(e instanceof ApiError && e.status === 401 ? "Invalid email or password." : errorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -51,17 +67,17 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-[var(--text-dim)]">Email</label>
-              <Input type="email" required className="mt-1.5 w-full" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <label htmlFor="login-email" className="block text-xs font-semibold text-[var(--text-dim)]">Email</label>
+              <Input id="login-email" autoComplete="email" type="email" required className="mt-1.5 w-full" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div>
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-[var(--text-dim)]">Password</label>
+                <label htmlFor="login-password" className="block text-xs font-semibold text-[var(--text-dim)]">Password</label>
                 <a href="/forgot-password" className="text-xs font-medium text-[var(--text-dim)] hover:text-[var(--text-muted)]">
                   Forgot password?
                 </a>
               </div>
-              <Input type="password" required className="mt-1.5 w-full" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Input id="login-password" autoComplete="current-password" type="password" required className="mt-1.5 w-full" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             {error && <p className="text-sm text-rose-600">{error}</p>}
             <PrimaryButton type="submit" disabled={loading} className="w-full">
@@ -85,6 +101,14 @@ export default function LoginPage() {
           <a href={`${API_BASE_URL}/auth/sso/login`} className="mt-3 block text-center text-xs text-[var(--text-dim)] hover:text-[var(--text-muted)]">
             Enterprise SSO
           </a>
+
+          <p className="mt-6 border-t border-[var(--line)] pt-4 text-center text-xs text-[var(--text-dim)]">
+            New to VeriSprint?{" "}
+            <a href={`${API_BASE_URL}/github/install`} className="font-semibold text-[var(--text-muted)] underline underline-offset-2 hover:text-[var(--foreground)]">
+              Connect a GitHub repo
+            </a>{" "}
+            to create your workspace.
+          </p>
         </div>
       </div>
     </div>

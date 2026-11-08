@@ -8,6 +8,7 @@ import secrets
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from app.auth.rate_limit import per_user_limit
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -83,7 +84,7 @@ async def list_custom_report_sections(user: User = Depends(get_internal_user)) -
     return CUSTOM_REPORT_SECTIONS
 
 
-@router.post("/custom", response_model=ReportDocumentOut)
+@router.post("/custom", response_model=ReportDocumentOut, dependencies=[Depends(per_user_limit("report", 20, 3600))])
 async def generate_custom_report(
     payload: GenerateCustomReportRequest, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
 ) -> ReportDocument:
@@ -119,7 +120,7 @@ async def generate_custom_report(
     return report
 
 
-@router.post("/sprint-rollup", response_model=ReportDocumentOut)
+@router.post("/sprint-rollup", response_model=ReportDocumentOut, dependencies=[Depends(per_user_limit("report", 20, 3600))])
 async def generate_sprint_rollup(
     payload: GenerateReportRequest, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
 ) -> ReportDocument:
@@ -150,7 +151,7 @@ async def generate_sprint_rollup(
     return report
 
 
-@router.post("/investor-update", response_model=ReportDocumentOut)
+@router.post("/investor-update", response_model=ReportDocumentOut, dependencies=[Depends(per_user_limit("report", 20, 3600))])
 async def generate_investor_update(
     payload: GenerateReportRequest, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
 ) -> ReportDocument:
@@ -178,7 +179,7 @@ async def generate_investor_update(
     return report
 
 
-@router.post("/client-portal", response_model=ReportDocumentOut)
+@router.post("/client-portal", response_model=ReportDocumentOut, dependencies=[Depends(per_user_limit("report", 20, 3600))])
 async def generate_client_portal_report(
     payload: GenerateReportRequest, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
 ) -> ReportDocument:
@@ -215,7 +216,7 @@ async def generate_client_portal_report(
     return report
 
 
-@router.post("/onboarding-doc", response_model=ReportDocumentOut)
+@router.post("/onboarding-doc", response_model=ReportDocumentOut, dependencies=[Depends(per_user_limit("report", 20, 3600))])
 async def generate_onboarding_doc(
     payload: GenerateReportRequest, user: User = Depends(get_internal_user), db: AsyncSession = Depends(get_db)
 ) -> ReportDocument:

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import record_audit_for_user
 from app.auth.dependencies import require_role
+from app.auth.security import hash_api_token
 from app.db.models import User, UserRole, Workspace
 from app.db.session import get_db
 from app.schemas import MCPConfigOut
@@ -36,7 +37,7 @@ async def rotate_mcp_token(
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     new_token = secrets.token_urlsafe(32)
-    workspace.mcp_token = new_token
+    workspace.mcp_token = hash_api_token(new_token)  # only the hash is stored; the raw token is shown once
     await record_audit_for_user(
         db, user=admin, action="mcp_config.token_rotated", entity_type="workspace", entity_id=str(workspace.id),
     )

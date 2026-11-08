@@ -1,9 +1,10 @@
 """Pydantic (API) schemas — request/response shapes, kept separate from ORM models."""
+import re
 import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 class RepoOut(BaseModel):
@@ -17,7 +18,7 @@ class RepoOut(BaseModel):
 
 
 class RepoUpdate(BaseModel):
-    slack_channel_id: str | None = None
+    slack_channel_id: str | None = Field(default=None, max_length=64)
 
 
 class EvidenceItemOut(BaseModel):
@@ -74,12 +75,12 @@ class TicketOut(BaseModel):
 
 class TicketCreate(BaseModel):
     repo_id: uuid.UUID
-    key: str
-    title: str
-    description: str | None = None
-    status: str
-    assignee_github_login: str | None = None
-    source: str = "manual"
+    key: str = Field(max_length=64)
+    title: str = Field(max_length=500)
+    description: str | None = Field(default=None, max_length=20000)
+    status: str = Field(max_length=64)
+    assignee_github_login: str | None = Field(default=None, max_length=255)
+    source: str = Field(default="manual", max_length=32)
 
 
 class StandupUpdateOut(BaseModel):
@@ -95,8 +96,8 @@ class StandupUpdateOut(BaseModel):
 
 class RepoChatQuery(BaseModel):
     repo_id: uuid.UUID
-    question: str
-    asked_by: str | None = None
+    question: str = Field(max_length=2000)
+    asked_by: str | None = Field(default=None, max_length=255)
 
 
 class RepoChatAnswer(BaseModel):
@@ -117,19 +118,25 @@ class ChatQueryOut(BaseModel):
 
 
 class TicketUpdate(BaseModel):
-    status: str | None = None
-    title: str | None = None
-    description: str | None = None
-    acceptance_criteria: str | None = None
-    assignee_github_login: str | None = None
+    status: str | None = Field(default=None, max_length=64)
+    title: str | None = Field(default=None, max_length=500)
+    description: str | None = Field(default=None, max_length=20000)
+    acceptance_criteria: str | None = Field(default=None, max_length=20000)
+    assignee_github_login: str | None = Field(default=None, max_length=255)
 
 
 class SprintCreate(BaseModel):
     repo_id: uuid.UUID
-    name: str
+    name: str = Field(min_length=1, max_length=255)
     start_date: datetime
     end_date: datetime
     planned_ticket_keys: list[str] = []
+
+    @model_validator(mode="after")
+    def _end_after_start(self) -> "SprintCreate":
+        if self.end_date < self.start_date:
+            raise ValueError("end_date can't be before start_date")
+        return self
 
 
 class SprintOut(BaseModel):
@@ -174,7 +181,7 @@ class ReportDocumentOut(BaseModel):
 
 class GenerateReportRequest(BaseModel):
     repo_id: uuid.UUID
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=500)
     period_start: datetime | None = None  # required except for onboarding_doc
     period_end: datetime | None = None  # required except for onboarding_doc
     sprint_id: uuid.UUID | None = None  # required for sprint_rollup
@@ -182,7 +189,7 @@ class GenerateReportRequest(BaseModel):
 
 class GenerateCustomReportRequest(BaseModel):
     repo_id: uuid.UUID
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=500)
     period_start: datetime
     period_end: datetime
     sections: list[str] = Field(min_length=1)
@@ -282,10 +289,26 @@ class PublicPortalReportOut(BaseModel):
 
 
 class WorkspaceSettingsUpdate(BaseModel):
-    name: str | None = None
-    logo_url: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    logo_url: str | None = Field(default=None, max_length=1024)
     primary_color_hex: str | None = None
-    avg_standup_minutes: int | None = None
+    avg_standup_minutes: int | None = Field(default=None, ge=1, le=240)
+    hourly_rate_usd: float | None = Field(default=None, ge=0, le=10000)
+
+    @field_validator("logo_url")
+    @classmethod
+    def _http_logo(cls, v: str | None) -> str | None:
+        # Shown on the public Client Portal, so only real http(s) image URLs.
+        if v and not re.match(r"^https?://\S+$", v):
+            raise ValueError("must be a full http:// or https:// image URL")
+        return v or None
+
+    @field_validator("primary_color_hex")
+    @classmethod
+    def _hex_color(cls, v: str | None) -> str | None:
+        if v is not None and not re.match(r"^#[0-9a-fA-F]{6}$", v):
+            raise ValueError("must be a hex color like #0EA5E9")
+        return v
 
 
 # --- Auth (spec Section 6) ---------------------------------------------------
@@ -313,16 +336,30 @@ class TokenPair(BaseModel):
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=1)
+    password: str = Field(min_length=1, max_length=256)
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str = Field(max_length=4096)
+
+
+_COMMON_PASSWORDS = {
+    "password", "password1", "password12", "password123", "1234567890", "12345678910", "qwertyuiop",
+    "qwerty1234", "iloveyou12", "letmein123", "welcome123", "admin12345", "abcdefghij", "verisprint",
+    "changeme123", "passw0rd12", "football12", "1q2w3e4r5t", "monkey1234", "dragon1234",
+}
 
 
 class SetPasswordRequest(BaseModel):
-    token: str
+    token: str = Field(max_length=4096)
     password: str = Field(min_length=10, max_length=256)
+
+    @field_validator("password")
+    @classmethod
+    def _strong_enough(cls, v: str) -> str:
+        if v.lower() in _COMMON_PASSWORDS or len(set(v)) < 5:
+            raise ValueError("is too easy to guess — try a longer phrase or mix in more characters")
+        return v
 
 
 class RequestPasswordResetRequest(BaseModel):
@@ -331,12 +368,12 @@ class RequestPasswordResetRequest(BaseModel):
 
 class InviteUserRequest(BaseModel):
     email: EmailStr
-    role: str
-    name: str | None = None
+    role: str = Field(max_length=32)
+    name: str | None = Field(default=None, max_length=255)
 
 
 class ChangeRoleRequest(BaseModel):
-    role: str
+    role: str = Field(max_length=32)
 
 
 # --- Super-Admin Dashboard (spec Section 7) -----------------------------------
@@ -418,17 +455,17 @@ class FeatureFlagOut(BaseModel):
 
 
 class FeatureFlagCreate(BaseModel):
-    key: str
-    description: str | None = None
+    key: str = Field(max_length=64)
+    description: str | None = Field(default=None, max_length=20000)
     enabled_globally: bool = False
-    min_plan_tier: str | None = None
+    min_plan_tier: str | None = Field(default=None, max_length=32)
 
 
 class FeatureFlagUpdate(BaseModel):
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=20000)
     enabled_globally: bool | None = None
     enabled_workspace_ids: list[str] | None = None
-    min_plan_tier: str | None = None
+    min_plan_tier: str | None = Field(default=None, max_length=32)
 
 
 class AdminOverview(BaseModel):
@@ -444,9 +481,9 @@ class AdminOverview(BaseModel):
 # --- Billing (spec Section 7) -------------------------------------------------
 
 class CheckoutRequest(BaseModel):
-    plan_tier: str
-    success_url: str
-    cancel_url: str
+    plan_tier: str = Field(max_length=32)
+    success_url: str = Field(max_length=2048)
+    cancel_url: str = Field(max_length=2048)
     provider: Literal["stripe", "paystack"] = "stripe"
 
 
@@ -455,7 +492,7 @@ class CheckoutResponse(BaseModel):
 
 
 class BillingPortalRequest(BaseModel):
-    return_url: str
+    return_url: str = Field(max_length=2048)
 
 
 class BillingPortalResponse(BaseModel):
@@ -493,7 +530,7 @@ class PricingPlanOut(BaseModel):
 
 
 class PricingPlanUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=255)
     price_usd: float | None = Field(default=None, ge=0)
     billing_interval: Literal["month", "year"] | None = None
     is_active: bool | None = None
@@ -594,9 +631,9 @@ class TeamGoalOut(BaseModel):
 
 
 class TeamGoalCreate(BaseModel):
-    name: str
+    name: str = Field(max_length=255)
     repo_id: uuid.UUID | None = None
-    metric_key: str
+    metric_key: str = Field(max_length=64)
     target_value: float
     period_start: datetime
     period_end: datetime
@@ -614,7 +651,7 @@ class IntegrationOut(BaseModel):
 
 
 class IntegrationConnectRequest(BaseModel):
-    provider: str
+    provider: str = Field(max_length=32)
     config: dict = {}
 
 
@@ -710,13 +747,13 @@ class PulseSurveyOut(BaseModel):
 
 
 class PulseSurveyCreate(BaseModel):
-    question: str
+    question: str = Field(max_length=2000)
     closes_at: datetime | None = None
 
 
 class PulseSurveyResponseCreate(BaseModel):
     score: int = Field(ge=1, le=5)
-    comment: str | None = None
+    comment: str | None = Field(default=None, max_length=5000)
 
 
 class WorkingAgreementOut(BaseModel):
@@ -733,7 +770,7 @@ class WorkingAgreementOut(BaseModel):
 
 class WorkingAgreementUpsert(BaseModel):
     repo_id: uuid.UUID | None = None
-    body_markdown: str
+    body_markdown: str = Field(max_length=50000)
 
 
 class WorkspaceSSOConfigOut(BaseModel):
@@ -749,9 +786,9 @@ class WorkspaceSSOConfigOut(BaseModel):
 
 
 class WorkspaceSSOConfigUpsert(BaseModel):
-    issuer: str
-    client_id: str
-    client_secret: str
+    issuer: str = Field(max_length=2048)
+    client_id: str = Field(max_length=512)
+    client_secret: str = Field(max_length=2048)
     enabled: bool = True
 
 
@@ -759,9 +796,12 @@ CONTACT_REASONS = {"enterprise", "security", "bug_report", "other"}
 
 
 class ContactMessageCreate(BaseModel):
+    # Strip first so a name/message of only spaces fails min_length.
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     name: str = Field(min_length=1, max_length=255)
     email: EmailStr
-    reason: str = "other"
+    reason: str = Field(default="other", max_length=32)
     message: str = Field(min_length=1, max_length=5000)
 
 
@@ -788,7 +828,7 @@ class AIToolSubscriptionCreate(BaseModel):
     billing_period: Literal["monthly", "annual"]
     started_on: date
     ended_on: date | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
 
 
 class AIToolSubscriptionUpdate(BaseModel):
@@ -798,7 +838,7 @@ class AIToolSubscriptionUpdate(BaseModel):
     billing_period: Literal["monthly", "annual"] | None = None
     started_on: date | None = None
     ended_on: date | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
 
 
 class AIToolSubscriptionOut(BaseModel):

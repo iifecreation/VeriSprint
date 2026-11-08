@@ -18,9 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import ClientPortalLink, Repo, ReportDocument, Workspace
 from app.db.session import get_db
 from app.schemas import PortalBranding, PublicPortalReportOut
-from app.billing_access import require_active_access
+from app.billing_access import workspace_has_active_access
 
-router = APIRouter(prefix="/portal", tags=["client-portal"], dependencies=[Depends(require_active_access)])
+# No auth dependency here: the people opening these links are the agency's
+# clients, who have no VeriSprint account. (`require_active_access` needs a
+# logged-in user, so attaching it to this router 401'd every client.) The
+# owning workspace's billing state is checked per request below instead.
+router = APIRouter(prefix="/portal", tags=["client-portal"])
 
 
 @router.get("/{token}", response_model=PublicPortalReportOut)
@@ -38,6 +42,8 @@ async def get_public_portal_report(token: str, db: AsyncSession = Depends(get_db
 
     repo = await db.get(Repo, report.repo_id)
     workspace = await db.get(Workspace, repo.workspace_id) if repo else None
+    if workspace is not None and not workspace_has_active_access(workspace):
+        raise HTTPException(status_code=404, detail="This portal link is currently unavailable.")
     branding = (
         PortalBranding(name=workspace.name, logo_url=workspace.logo_url, primary_color_hex=workspace.primary_color_hex)
         if workspace is not None

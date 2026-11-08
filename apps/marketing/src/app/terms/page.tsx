@@ -46,7 +46,8 @@ export default function TermsPage() {
 
       <h2>4. Plans and billing</h2>
       <p>
-        The Free tier has no time limit and requires no payment method. Paid tiers are billed per the plan you
+        New workspaces get a 30-day free trial that requires no payment method. To keep using the Service after the
+        trial ends, choose a paid plan. Paid tiers are billed per the plan you
         select at{" "}
         <a href="/pricing" className="text-brand underline">Pricing</a>, processed by Stripe. You can downgrade or
         cancel at any time from your workspace settings; downgrades take effect at the end of the current billing
@@ -91,7 +92,7 @@ export default function TermsPage() {
 
       <h2>9. Availability and changes</h2>
       <p>
-        We aim for high availability but don&apos;t guarantee an uptime SLA on Free or self-serve paid tiers — see
+        We aim for high availability but don&apos;t guarantee an uptime SLA during the free trial or on self-serve paid tiers — see
         our{" "}
         <a href="/status" className="text-brand underline">Status page</a> for real-time system health. We may
         change or discontinue a feature; where reasonably possible, we&apos;ll give notice for any change that

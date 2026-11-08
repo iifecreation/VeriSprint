@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { api, errorMessage } from "@/lib/api";
 import { Input, PrimaryButton } from "@/components/ui";
 
 /** Requests a password-reset email (`POST /auth/request-password-reset`).
@@ -12,15 +12,21 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       await api.requestPasswordReset(email);
-    } finally {
-      // Same outcome shown either way — see the docstring above.
+      // Same outcome shown whether or not the account exists — see the docstring above.
       setSent(true);
+    } catch (e) {
+      // Only a rate limit / bad input / outage lands here — those don't
+      // reveal anything about the account, so say what actually happened.
+      setError(errorMessage(e));
+    } finally {
       setLoading(false);
     }
   }
@@ -49,6 +55,7 @@ export default function ForgotPasswordPage() {
                   <label className="block text-xs font-semibold text-[var(--text-dim)]">Email</label>
                   <Input type="email" required className="mt-1.5 w-full" value={email} onChange={(e) => setEmail(e.target.value)} />
                 </div>
+                {error && <p className="text-sm text-rose-600">{error}</p>}
                 <PrimaryButton type="submit" disabled={loading} className="w-full">
                   {loading ? "Sending…" : "Send reset link"}
                 </PrimaryButton>

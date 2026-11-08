@@ -141,3 +141,11 @@ def decode_action_token(token: str, *, expected_purpose: ActionPurpose) -> dict[
     if claims.get("type") != "action" or claims.get("purpose") != expected_purpose:
         raise TokenError("Invalid link")
     return claims
+
+
+def hash_api_token(raw_token: str) -> str:
+    """One-way hash for long-lived bearer tokens (SCIM, MCP) so they're
+    stored like passwords: a database leak doesn't hand out working tokens.
+    Plain SHA-256 is enough because these tokens are long random strings,
+    not human-chosen passwords."""
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()

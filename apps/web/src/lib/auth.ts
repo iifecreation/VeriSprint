@@ -91,6 +91,10 @@ export async function refreshAccessToken(): Promise<string | null> {
           body: JSON.stringify({ refresh_token: refreshToken }),
         });
         if (!res.ok) {
+          // Refresh tokens are single-use. If another tab refreshed first,
+          // storage already holds its new pair — use that instead of
+          // logging this tab out.
+          if (getRefreshToken() !== refreshToken && getAccessToken()) return getAccessToken();
           clearTokens();
           return null;
         }
@@ -117,4 +121,24 @@ export async function logout(): Promise<void> {
       // Token's cleared client-side either way — a failed network call here isn't worth surfacing.
     }
   }
+}
+
+/** Routes a signed-out visitor may open. Everything else in this app needs a session. */
+export const PUBLIC_ROUTE_PREFIXES = ["/login", "/auth/callback", "/accept-invite", "/reset-password", "/forgot-password", "/portal/"];
+
+export function isPublicRoute(pathname: string): boolean {
+  return pathname === "/" || PUBLIC_ROUTE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+/** Sends the browser to /login, remembering where the user was headed. */
+export function redirectToLogin(): void {
+  if (typeof window === "undefined") return;
+  const { pathname, search } = window.location;
+  if (isPublicRoute(pathname)) return;
+  window.location.href = `/login?next=${encodeURIComponent(pathname + search)}`;
+}
+
+/** Only same-app relative paths are allowed as a post-login destination. */
+export function safeNextPath(next: string | null): string {
+  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
 }

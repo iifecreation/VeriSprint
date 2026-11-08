@@ -30,7 +30,11 @@ settings = get_settings()
 
 def _verify_signature(payload: bytes, signature_header: str | None) -> None:
     if not settings.github_webhook_secret:
-        # Explicit opt-out only in local dev when no secret is configured yet.
+        # Local dev only: without a secret anyone could forge installs and
+        # pushes, so production refuses (and won't even boot — see
+        # app/hardening.py).
+        if settings.is_production:
+            raise HTTPException(status_code=503, detail="Webhook verification is not configured")
         return
     if not signature_header:
         raise HTTPException(status_code=401, detail="Missing X-Hub-Signature-256")

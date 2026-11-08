@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import record_audit_for_user
 from app.auth.dependencies import require_feature_flag, require_role
+from app.auth.security import hash_api_token
+from app.hardening import assert_public_https_url
 from app.db.models import User, UserRole, WorkspaceSSOConfig
 from app.db.session import get_db
 from app.schemas import WorkspaceSSOConfigOut, WorkspaceSSOConfigUpsert
@@ -40,6 +42,12 @@ async def upsert_sso_config(
 ) -> WorkspaceSSOConfigOut:
     if admin.workspace_id is None:
         raise HTTPException(status_code=400, detail="Your account isn't attached to a workspace")
+    # The server fetches this URL, so it must be a public https address —
+    # never localhost, a private network, or a cloud metadata endpoint.
+    try:
+        assert_public_https_url(payload.issuer)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Issuer URL: {exc}") from exc
     result = await db.execute(select(WorkspaceSSOConfig).where(WorkspaceSSOConfig.workspace_id == admin.workspace_id))
     config = result.scalar_one_or_none()
     before = {"issuer": config.issuer, "enabled": config.enabled} if config else None
@@ -75,7 +83,7 @@ async def rotate_scim_token(
         raise HTTPException(status_code=404, detail="Configure SSO before generating a SCIM token")
 
     new_token = secrets.token_urlsafe(32)
-    config.scim_token = new_token
+    config.scim_token = hash_api_token(new_token)  # only the hash is stored; the raw token is shown once
     await record_audit_for_user(db, user=admin, action="sso_config.scim_token_rotated", entity_type="workspace_sso_config", entity_id=str(config.id))
     await db.commit()
     return {"scim_token": new_token}

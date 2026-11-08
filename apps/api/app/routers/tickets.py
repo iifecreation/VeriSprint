@@ -57,6 +57,10 @@ async def create_ticket(
         raise HTTPException(status_code=404, detail="Repo not found")
     ensure_workspace_access(user, repo.workspace_id)
 
+    existing = await db.execute(select(Ticket.id).where(Ticket.repo_id == payload.repo_id, Ticket.key == payload.key))
+    if existing.first() is not None:
+        raise HTTPException(status_code=409, detail=f"A ticket with key {payload.key} already exists in this repo")
+
     ticket = Ticket(**payload.model_dump())
     db.add(ticket)
     await db.flush()

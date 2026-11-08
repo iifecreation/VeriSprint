@@ -11,11 +11,12 @@ WORKSPACE_ADMIN (spec: billing is explicitly out of MANAGER's scope).
 import json
 import logging
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import record_audit, record_audit_for_user
@@ -30,6 +31,7 @@ from app.db.models import (
     Workspace,
     WorkspacePlanTier,
 )
+from app.config import get_settings
 from app.db.session import AsyncSessionLocal, get_db
 from app.feature_flags import is_feature_enabled_for_user
 from app.integrations import paystack_client
@@ -70,13 +72,40 @@ _STRIPE_STATUS_MAP: dict[str, SubscriptionStatus] = {
 }
 
 
+_CHECKOUT_UNAVAILABLE = "Online checkout isn't available for this plan right now. Email hello@verisprint.dev and we'll set it up for you."
+
+
+async def _billing_unavailable(reason: str) -> HTTPException:
+    """Billing misconfiguration is an operator problem, not something the
+    customer can act on — record the real reason for the Errors panel and
+    give the customer a message they can actually use."""
+    logger.error("Billing unavailable: %s", reason)
+    await record_error(source="billing", message=reason, stack_ref=None)
+    return HTTPException(status_code=503, detail=_CHECKOUT_UNAVAILABLE)
+
+
+def _require_own_site(url: str) -> str:
+    """Checkout/portal redirect targets must be on our own dashboard — never
+    an arbitrary site an attacker could use for phishing."""
+    from urllib.parse import urlparse
+
+    target, ours = urlparse(url), urlparse(get_settings().web_base_url)
+    if (target.scheme, target.netloc) != (ours.scheme, ours.netloc):
+        raise HTTPException(status_code=400, detail="Redirect URL must be on the VeriSprint dashboard")
+    return url
+
+
 async def _get_or_create_subscription(db: AsyncSession, workspace_id: UUID) -> Subscription:
     result = await db.execute(select(Subscription).where(Subscription.workspace_id == workspace_id))
     sub = result.scalar_one_or_none()
     if sub is None:
-        sub = Subscription(workspace_id=workspace_id)
-        db.add(sub)
-        await db.flush()
+        # ON CONFLICT DO NOTHING: two first-load requests (e.g. the trial
+        # banner and the settings page) can race to create the same row.
+        await db.execute(
+            pg_insert(Subscription).values(id=uuid4(), workspace_id=workspace_id).on_conflict_do_nothing(index_elements=["workspace_id"])
+        )
+        result = await db.execute(select(Subscription).where(Subscription.workspace_id == workspace_id))
+        sub = result.scalar_one()
     return sub
 
 
@@ -99,23 +128,22 @@ async def checkout(
     if plan_tier in (WorkspacePlanTier.FREE, WorkspacePlanTier.ENTERPRISE):
         raise HTTPException(status_code=400, detail=f"{plan_tier.value} isn't purchasable through checkout")
 
+    _require_own_site(payload.success_url)
+    _require_own_site(payload.cancel_url)
     sub = await _get_or_create_subscription(db, admin.workspace_id)
 
     if payload.provider == "paystack":
         result = await db.execute(select(PricingPlan).where(PricingPlan.tier == plan_tier, PricingPlan.is_active.is_(True)))
         plan = result.scalar_one_or_none()
         if plan is None or not plan.paystack_plan_code:
-            raise HTTPException(
-                status_code=503,
-                detail=f"No Paystack plan configured for {plan_tier.value} — set one from the Operator Console's Pricing panel",
-            )
+            raise await _billing_unavailable(f"No Paystack plan configured for {plan_tier.value}")
         try:
             authorization_url = paystack_client.initialize_transaction(
                 plan_code=plan.paystack_plan_code, workspace_id=str(admin.workspace_id), plan_tier=plan_tier,
                 customer_email=admin.email, callback_url=payload.success_url,
             )
         except PaystackNotConfigured as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
+            raise await _billing_unavailable(str(exc)) from exc
         except PaystackError as exc:
             raise HTTPException(status_code=502, detail=f"Paystack error: {exc}") from exc
 
@@ -139,7 +167,7 @@ async def checkout(
             cancel_url=payload.cancel_url,
         )
     except (StripeNotConfigured, ValueError) as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise await _billing_unavailable(str(exc)) from exc
     except stripe.StripeError as exc:
         raise HTTPException(status_code=502, detail=f"Stripe error: {exc.user_message or str(exc)}") from exc
 
@@ -178,9 +206,9 @@ async def billing_portal(
         raise HTTPException(status_code=400, detail="No billing account yet — subscribe to a plan first")
 
     try:
-        session = create_billing_portal_session(customer_id=sub.stripe_customer_id, return_url=payload.return_url)
+        session = create_billing_portal_session(customer_id=sub.stripe_customer_id, return_url=_require_own_site(payload.return_url))
     except StripeNotConfigured as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise await _billing_unavailable(str(exc)) from exc
     except stripe.StripeError as exc:
         raise HTTPException(status_code=502, detail=f"Stripe error: {exc.user_message or str(exc)}") from exc
 
