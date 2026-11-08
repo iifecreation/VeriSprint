@@ -20,9 +20,14 @@ export default function LoginPage() {
   // Redirect-based sign-in paths (SSO) come back here with ?error=...
   useEffect(() => {
     queueMicrotask(() => {
-      if (new URLSearchParams(window.location.search).get("error") === "sso_not_configured") {
-        setError("Single sign-on isn't set up for your workspace. Sign in with email or GitHub, or ask your admin.");
-      }
+      const messages: Record<string, string> = {
+        sso_not_configured: "Single sign-on isn't set up for your workspace. Sign in with email or GitHub, or ask your admin.",
+        sso_failed: "We couldn't reach your company's sign-in provider. Try again, or ask your admin.",
+        oauth_state: "That GitHub sign-in link expired or didn't start here. Please try again.",
+        oauth_failed: "GitHub sign-in didn't complete. Please try again.",
+      };
+      const code = new URLSearchParams(window.location.search).get("error");
+      if (code && messages[code]) setError(messages[code]);
     });
   }, []);
 

@@ -16,7 +16,10 @@ Redirect-based flows (OAuth/SSO) hand the token pair to the SPA via a URL
 *fragment* (`#access_token=...`) rather than a query string — fragments never
 reach the server or access logs.
 """
+import hmac
 import logging
+import secrets
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -28,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import record_audit, record_audit_for_user
 from app.auth.dependencies import ensure_workspace_access, get_current_user, require_role
-from app.auth.rate_limit import client_ip, enforce_rate_limit
+from app.auth.rate_limit import _client as _redis, client_ip, enforce_rate_limit, limit_per_user
 from app.auth.security import (
     TokenError,
     create_action_token,
@@ -61,6 +64,14 @@ GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_USER_URL = "https://api.github.com/user"
 GITHUB_ORGS_URL = "https://api.github.com/user/orgs"
+OAUTH_STATE_COOKIE = "verisprint_gh_oauth_state"
+# Verifying against a real hash when the email doesn't exist keeps login
+# timing identical either way, so response time can't reveal which emails
+# have accounts.
+_DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
+# Two browser tabs can race to refresh with the same token; a second use
+# within this window is refused but not treated as theft.
+_REFRESH_REUSE_GRACE_SECONDS = 60
 
 
 def _token_pair_for(user: User) -> dict:
@@ -110,16 +121,28 @@ async def _link_workspace_if_possible(db: AsyncSession, user: User, github_acces
 
 @router.get("/github/login")
 async def github_login() -> RedirectResponse:
+    # `state` ties the callback to this browser (OAuth CSRF protection):
+    # without it, an attacker could log a victim into the attacker's account.
+    state = secrets.token_urlsafe(32)
     params = (
         f"client_id={settings.github_client_id}"
         f"&redirect_uri={settings.api_base_url}/auth/github/callback"
         f"&scope=read:user%20read:org"
+        f"&state={state}"
     )
-    return RedirectResponse(f"{GITHUB_AUTHORIZE_URL}?{params}")
+    response = RedirectResponse(f"{GITHUB_AUTHORIZE_URL}?{params}")
+    response.set_cookie(
+        OAUTH_STATE_COOKIE, state, httponly=True, secure=settings.is_production, samesite="lax",
+        max_age=600, path="/auth/github",
+    )
+    return response
 
 
 @router.get("/github/callback")
-async def github_callback(code: str, db: AsyncSession = Depends(get_db)) -> RedirectResponse:
+async def github_callback(request: Request, code: str, state: str | None = None, db: AsyncSession = Depends(get_db)) -> RedirectResponse:
+    expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not state or not expected_state or not hmac.compare_digest(state, expected_state):
+        return RedirectResponse(f"{settings.web_base_url}/login?error=oauth_state")
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(
             GITHUB_TOKEN_URL,
@@ -130,10 +153,9 @@ async def github_callback(code: str, db: AsyncSession = Depends(get_db)) -> Redi
                 "code": code,
             },
         )
-        token_resp.raise_for_status()
-        github_access_token = token_resp.json().get("access_token")
+        github_access_token = token_resp.json().get("access_token") if token_resp.is_success else None
         if not github_access_token:
-            raise HTTPException(status_code=400, detail="GitHub OAuth exchange failed")
+            return RedirectResponse(f"{settings.web_base_url}/login?error=oauth_failed")
 
         user_resp = await client.get(
             GITHUB_USER_URL, headers={"Authorization": f"Bearer {github_access_token}"}
@@ -168,7 +190,9 @@ async def github_callback(code: str, db: AsyncSession = Depends(get_db)) -> Redi
     )
     await db.commit()
 
-    return _redirect_with_tokens(_token_pair_for(user))
+    response = _redirect_with_tokens(_token_pair_for(user))
+    response.delete_cookie(OAUTH_STATE_COOKIE, path="/auth/github")
+    return response
 
 
 @router.post("/login", response_model=TokenPair)
@@ -181,7 +205,9 @@ async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depe
 
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
-    if user is None or user.password_hash is None or not verify_password(payload.password, user.password_hash):
+    password_ok = verify_password(payload.password, user.password_hash if user and user.password_hash else _DUMMY_PASSWORD_HASH)
+    if user is None or user.password_hash is None or not password_ok:
+        logger.info("Failed login for %s from %s", payload.email.lower(), client_ip(request))
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     user.last_login_at = datetime.now(timezone.utc)
@@ -192,7 +218,8 @@ async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depe
 
 
 @router.post("/refresh", response_model=TokenPair)
-async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -> TokenPair:
+async def refresh(payload: RefreshRequest, request: Request, db: AsyncSession = Depends(get_db)) -> TokenPair:
+    await enforce_rate_limit(key=f"ratelimit:refresh:ip:{client_ip(request)}", max_attempts=60, window_seconds=900)
     try:
         claims = decode_token(payload.refresh_token, expected_type="refresh")
     except TokenError as exc:
@@ -202,7 +229,28 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -
     if user is None or claims.get("tv") != user.token_version:
         raise HTTPException(status_code=401, detail="Refresh token has been revoked")
 
-    # Rotate on every use — mitigates replay of a stolen refresh token.
+    # Refresh tokens are single-use. A token presented twice means it was
+    # copied: outside a short grace window (two tabs racing), revoke every
+    # session for this user so a stolen token stops working immediately.
+    jti = claims.get("jti")
+    if not jti:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    ttl = max(int(claims["exp"] - time.time()), 1)
+    try:
+        first_use = await _redis().set(f"refresh:used:{jti}", str(int(time.time())), nx=True, ex=ttl)
+        used_at = None if first_use else await _redis().get(f"refresh:used:{jti}")
+    except Exception as exc:
+        if settings.is_production:
+            raise HTTPException(status_code=503, detail="Temporarily unavailable — please try again shortly.") from exc
+        first_use, used_at = True, None
+    if not first_use:
+        if used_at and time.time() - int(used_at) > _REFRESH_REUSE_GRACE_SECONDS:
+            user.token_version += 1
+            await record_audit_for_user(db, user=user, action="user.refresh_token_reuse_detected", entity_type="user", entity_id=str(user.id))
+            await db.commit()
+            logger.warning("Refresh token reuse detected for user %s — all sessions revoked", user.id)
+        raise HTTPException(status_code=401, detail="Refresh token has already been used")
+
     return TokenPair(**_token_pair_for(user), user=UserOut.model_validate(user))
 
 
@@ -222,9 +270,13 @@ async def me(user: User = Depends(get_current_user)) -> UserOut:
 @router.post("/invite")
 async def invite_user(
     payload: InviteUserRequest,
+    request: Request,
     inviter: User = Depends(require_role(UserRole.WORKSPACE_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    # Each invite sends a real email — cap it so a compromised admin
+    # account can't be used to spam.
+    await limit_per_user(request, scope="invite", user_id=inviter.id, max_attempts=30, window_seconds=3600)
     if inviter.workspace_id is None:
         raise HTTPException(status_code=400, detail="Your account isn't attached to a workspace")
     try:
@@ -335,7 +387,8 @@ async def remove_user_from_workspace(
 
 
 @router.post("/accept-invite", response_model=TokenPair)
-async def accept_invite(payload: SetPasswordRequest, db: AsyncSession = Depends(get_db)) -> TokenPair:
+async def accept_invite(payload: SetPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)) -> TokenPair:
+    await enforce_rate_limit(key=f"ratelimit:setpw:ip:{client_ip(request)}", max_attempts=20, window_seconds=3600)
     try:
         claims = decode_action_token(payload.token, expected_purpose="invite")
     except TokenError as exc:
@@ -382,7 +435,8 @@ async def request_password_reset(payload: RequestPasswordResetRequest, request: 
 
 
 @router.post("/reset-password", response_model=TokenPair)
-async def reset_password(payload: SetPasswordRequest, db: AsyncSession = Depends(get_db)) -> TokenPair:
+async def reset_password(payload: SetPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)) -> TokenPair:
+    await enforce_rate_limit(key=f"ratelimit:setpw:ip:{client_ip(request)}", max_attempts=20, window_seconds=3600)
     try:
         claims = decode_action_token(payload.token, expected_purpose="password_reset")
     except TokenError as exc:

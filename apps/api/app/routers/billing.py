@@ -31,6 +31,7 @@ from app.db.models import (
     Workspace,
     WorkspacePlanTier,
 )
+from app.config import get_settings
 from app.db.session import AsyncSessionLocal, get_db
 from app.feature_flags import is_feature_enabled_for_user
 from app.integrations import paystack_client
@@ -83,6 +84,17 @@ async def _billing_unavailable(reason: str) -> HTTPException:
     return HTTPException(status_code=503, detail=_CHECKOUT_UNAVAILABLE)
 
 
+def _require_own_site(url: str) -> str:
+    """Checkout/portal redirect targets must be on our own dashboard — never
+    an arbitrary site an attacker could use for phishing."""
+    from urllib.parse import urlparse
+
+    target, ours = urlparse(url), urlparse(get_settings().web_base_url)
+    if (target.scheme, target.netloc) != (ours.scheme, ours.netloc):
+        raise HTTPException(status_code=400, detail="Redirect URL must be on the VeriSprint dashboard")
+    return url
+
+
 async def _get_or_create_subscription(db: AsyncSession, workspace_id: UUID) -> Subscription:
     result = await db.execute(select(Subscription).where(Subscription.workspace_id == workspace_id))
     sub = result.scalar_one_or_none()
@@ -116,6 +128,8 @@ async def checkout(
     if plan_tier in (WorkspacePlanTier.FREE, WorkspacePlanTier.ENTERPRISE):
         raise HTTPException(status_code=400, detail=f"{plan_tier.value} isn't purchasable through checkout")
 
+    _require_own_site(payload.success_url)
+    _require_own_site(payload.cancel_url)
     sub = await _get_or_create_subscription(db, admin.workspace_id)
 
     if payload.provider == "paystack":
@@ -192,7 +206,7 @@ async def billing_portal(
         raise HTTPException(status_code=400, detail="No billing account yet — subscribe to a plan first")
 
     try:
-        session = create_billing_portal_session(customer_id=sub.stripe_customer_id, return_url=payload.return_url)
+        session = create_billing_portal_session(customer_id=sub.stripe_customer_id, return_url=_require_own_site(payload.return_url))
     except StripeNotConfigured as exc:
         raise await _billing_unavailable(str(exc)) from exc
     except stripe.StripeError as exc:

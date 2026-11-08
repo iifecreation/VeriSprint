@@ -110,7 +110,18 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(default="dev-jwt-secret-change-me", alias="JWT_SECRET")
     jwt_issuer: str = Field(default="verisprint", alias="JWT_ISSUER")
     jwt_access_ttl_minutes: int = Field(default=15, alias="JWT_ACCESS_TTL_MINUTES")
-    jwt_refresh_ttl_days: int = Field(default=30, alias="JWT_REFRESH_TTL_DAYS")
+    jwt_refresh_ttl_days: int = Field(default=14, alias="JWT_REFRESH_TTL_DAYS")
+
+    # --- Security hardening ---
+    # Extra hostnames this API answers to in production, comma-separated
+    # (the API_BASE_URL host is always allowed). Blocks Host-header attacks.
+    allowed_hosts: str = Field(default="", alias="ALLOWED_HOSTS")
+    # How many reverse proxies sit in front of the API (e.g. 1 on Render/
+    # Koyeb/Fly). Used to read the real client IP from X-Forwarded-For
+    # without trusting values a client can forge. 0 = use the socket IP.
+    trusted_proxy_hops: int = Field(default=0, alias="TRUSTED_PROXY_HOPS")
+    # Largest request body accepted, in bytes (webhooks get a higher cap).
+    max_request_bytes: int = Field(default=1_000_000, alias="MAX_REQUEST_BYTES")
     # Where OAuth/SSO callbacks hand tokens to the SPA (URL fragment, never a query
     # string — fragments aren't sent to the server or logged in access logs).
     frontend_auth_callback_path: str = Field(default="/auth/callback", alias="FRONTEND_AUTH_CALLBACK_PATH")
@@ -146,6 +157,11 @@ class Settings(BaseSettings):
     # auto-created/rotated by app/routers/pricing.py.
     paystack_secret_key: str = Field(default="", alias="PAYSTACK_SECRET_KEY")
     paystack_public_key: str = Field(default="", alias="PAYSTACK_PUBLIC_KEY")
+
+
+    @property
+    def is_production(self) -> bool:
+        return self.env.lower() in ("production", "prod")
 
 
 @lru_cache

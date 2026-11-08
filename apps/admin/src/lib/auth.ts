@@ -65,6 +65,10 @@ export async function refreshAccessToken(): Promise<string | null> {
           body: JSON.stringify({ refresh_token: refreshToken }),
         });
         if (!res.ok) {
+          // Refresh tokens are single-use. If another tab refreshed first,
+          // storage already holds its new pair — use that instead of
+          // logging this tab out.
+          if (getRefreshToken() !== refreshToken && getAccessToken()) return getAccessToken();
           clearTokens();
           return null;
         }

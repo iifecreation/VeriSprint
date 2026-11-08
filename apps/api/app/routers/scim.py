@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import record_audit
+from app.auth.security import hash_api_token
 from app.db.models import User, UserRole, WorkspaceSSOConfig
 from app.db.session import get_db
 
@@ -34,7 +35,7 @@ async def _authenticate_scim(
 ) -> WorkspaceSSOConfig:
     if credentials is None:
         raise HTTPException(status_code=401, detail="Missing bearer token")
-    result = await db.execute(select(WorkspaceSSOConfig).where(WorkspaceSSOConfig.scim_token == credentials.credentials))
+    result = await db.execute(select(WorkspaceSSOConfig).where(WorkspaceSSOConfig.scim_token == hash_api_token(credentials.credentials)))
     config = result.scalar_one_or_none()
     if config is None:
         raise HTTPException(status_code=401, detail="Invalid SCIM token")

@@ -21,7 +21,10 @@ a separate mock surface.
 from mcp.server.mcpserver import MCPServer
 from sqlalchemy import select
 
-from app.db.models import ConfidenceScore, EvidenceItem, Repo, Ticket, Workspace
+from app.auth.rate_limit import enforce_rate_limit
+from app.auth.security import hash_api_token
+from app.billing_access import workspace_has_active_access
+from app.db.models import ConfidenceScore, EvidenceItem, Repo, Ticket, Workspace, WorkspaceStatus
 from app.db.session import AsyncSessionLocal
 from app.integrations.llm_client import answer_repo_chat_question
 
@@ -38,11 +41,17 @@ mcp = MCPServer(
 
 
 async def _workspace_for_token(token: str) -> Workspace:
+    if not token or len(token) > 512:
+        raise ValueError("Invalid or revoked workspace_token — generate one from Settings → MCP.")
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Workspace).where(Workspace.mcp_token == token))
+        result = await db.execute(select(Workspace).where(Workspace.mcp_token == hash_api_token(token)))
         workspace = result.scalar_one_or_none()
         if workspace is None:
             raise ValueError("Invalid or revoked workspace_token — generate one from Settings → MCP.")
+        # Same rules as the web app: suspended or unpaid workspaces can't
+        # read data or run (paid) AI queries through this side door.
+        if workspace.status != WorkspaceStatus.ACTIVE or not workspace_has_active_access(workspace):
+            raise ValueError("This workspace is suspended or its trial has ended — subscribe to keep using VeriSprint.")
         return workspace
 
 
@@ -153,6 +162,10 @@ async def ask_repo_chat(workspace_token: str, repo_full_name: str, question: str
         question: A plain question, e.g. "did we ship the checkout redesign this week?"
     """
     workspace = await _workspace_for_token(workspace_token)
+    if not question.strip() or len(question) > 2000:
+        raise ValueError("Ask a question between 1 and 2000 characters.")
+    # Each question is a paid AI call — cap it per workspace.
+    await enforce_rate_limit(key=f"ratelimit:mcp_chat:ws:{workspace.id}", max_attempts=60, window_seconds=3600)
     async with AsyncSessionLocal() as db:
         repo_result = await db.execute(
             select(Repo).where(Repo.workspace_id == workspace.id, Repo.full_name == repo_full_name)

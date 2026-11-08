@@ -5,9 +5,11 @@ with their own IdP. `?workspace=<account_login>` resolves a per-workspace IdP
 to the process-global OIDC_* env vars — the only option for a single-tenant/
 self-hosted deployment. See app/integrations/sso_client.py.
 """
+import logging
 import secrets
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
@@ -29,6 +31,7 @@ from app.integrations.sso_client import (
 
 router = APIRouter(prefix="/auth/sso", tags=["sso"])
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 STATE_COOKIE = "verisprint_sso_state"
 
@@ -45,6 +48,10 @@ async def sso_login(workspace: str | None = None) -> RedirectResponse:
             # A person clicked "Enterprise SSO" in the browser — send them
             # back to sign-in with a message, not a raw JSON error page.
             return RedirectResponse(f"{settings.web_base_url}/login?error=sso_not_configured")
+        except (ValueError, KeyError, httpx.HTTPError):
+            # Unreachable/invalid identity provider (or blocked by the SSRF guard).
+            logger.warning("SSO login failed for workspace=%s", workspace, exc_info=True)
+            return RedirectResponse(f"{settings.web_base_url}/login?error=sso_failed")
 
     response = RedirectResponse(authorize_url)
     response.set_cookie(

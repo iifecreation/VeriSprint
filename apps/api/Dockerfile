@@ -34,4 +34,4 @@ EXPOSE 8000
 # `["arq", "app.queue.worker.WorkerSettings"]` for the worker process, and
 # to `["alembic", "upgrade", "head"]` as a one-off release/migration task —
 # same image, three roles.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-proxy-headers"]

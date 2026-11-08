@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AdminNav } from "@/components/AdminNav";
 import "./globals.css";
@@ -11,7 +12,10 @@ export const metadata: Metadata = {
   description: "Internal operator console — cross-tenant workspace, billing, and system-health administration.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+// Rendered per request so each page gets the nonce from src/proxy.ts
+// (a statically built page can't carry a per-request nonce).
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  await connection();
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
       <body className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
